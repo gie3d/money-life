@@ -45,8 +45,15 @@ export const isInvestment = (a: { type: string }) => a.type === "investment";
 
 export type Category = { id: number; name: string; type: string; color: string };
 
-/** Swatches offered for a category; any hex colour is also accepted. Mid-tone, so they hold on white and on black. */
-export const CATEGORY_COLORS = ["#fd6217", "#0a84ff", "#30b455", "#af52de", "#e0a800", "#ff375f", "#32aadf", "#8e8e93", "#00a693", "#7c5cff"] as const;
+/** Swatches offered for a category (25); any hex colour is also accepted. Mid-tone, so they hold on white and on black. */
+export const CATEGORY_COLORS = [
+  // Rows of five in the picker. The first ten are what new categories are given, in this order.
+  "#fd6217", "#0a84ff", "#30b455", "#af52de", "#e0a800",
+  "#ff375f", "#32aadf", "#8e8e93", "#00a693", "#7c5cff",
+  "#c2410c", "#1d4ed8", "#15803d", "#7e22ce", "#a16207",
+  "#fb923c", "#60a5fa", "#4ade80", "#c084fc", "#facc15",
+  "#be123c", "#0891b2", "#64748b", "#65a30d", "#92400e",
+] as const;
 
 export const HEX = /^#[0-9a-fA-F]{6}$/;
 
