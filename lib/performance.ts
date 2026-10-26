@@ -81,27 +81,67 @@ export type Point = {
   date: string;
   /** Total worth across accounts, each carried forward from its latest entry. */
   value: number;
-  /** Money put in: opening balances plus contributions, cumulatively. */
-  invested: number;
+  /** What the holdings cost: an investment's cost basis, or a balance's own amount. */
+  cost: number;
 };
 
-/** Net-worth series over the dates anything was recorded, within the window. */
+/**
+ * Total worth on every date something was recorded, within the window. An account counts at its latest
+ * record on or before each date, so an investment is valued at the units held times the last price known.
+ */
 export function netWorthSeries(byAccount: Entry[][], from: string | null, to: string): Point[] {
   const dates = new Set<string>();
   for (const list of byAccount) for (const e of list) if (e.date <= to && (!from || e.date >= from)) dates.add(e.date);
+  // Something recorded before the window still holds inside it: the window opens on what was last known.
+  if (from && from <= to && byAccount.some((l) => l.some((e) => e.date < from))) dates.add(from);
 
   const sorted = byAccount.map((l) => [...l].sort((a, b) => a.date.localeCompare(b.date)));
   return [...dates].sort().map((date) => {
     let value = 0;
-    let invested = 0;
+    let cost = 0;
     for (const list of sorted) {
       const seen = list.filter((e) => e.date <= date);
-      if (seen.length === 0) continue;
-      value += seen[seen.length - 1].value;
-      invested += seen[0].value + seen.slice(1).reduce((s, e) => s + e.contribution, 0);
+      const last = seen[seen.length - 1];
+      if (!last) continue;
+      value += last.value;
+      cost += last.cost ?? last.value;
     }
-    return { date, value, invested };
+    return { date, value, cost };
   });
+}
+
+export type Unit = "day" | "month" | "year";
+
+/** Runs the series on to `today` at the latest values: nothing recorded since means nothing is known to have changed. */
+export function extendTo(points: Point[], today: string): Point[] {
+  const last = points[points.length - 1];
+  return last && last.date < today ? [...points, { ...last, date: today }] : points;
+}
+
+/**
+ * The series at one step, run on to `today`. Values carry forward: until a new record, the worth stays what
+ * it last was (units held at the last price entered). "day" fills every calendar day so the line is evenly
+ * spaced; "month" and "year" keep the last point of each.
+ */
+export function resample(points: Point[], unit: Unit, today: string): Point[] {
+  if (points.length === 0) return [];
+  const run = extendTo(points, today);
+
+  if (unit !== "day") {
+    const len = unit === "month" ? 7 : 4;
+    const byKey = new Map<string, Point>();
+    for (const p of run) byKey.set(p.date.slice(0, len), p); // later points overwrite earlier ones
+    return [...byKey.values()];
+  }
+
+  const out: Point[] = [];
+  let i = 0;
+  for (let t = ms(run[0].date); t <= ms(run[run.length - 1].date); t += DAY) {
+    const date = iso(t);
+    while (i + 1 < run.length && run[i + 1].date <= date) i++;
+    out.push({ date, value: run[i].value, cost: run[i].cost });
+  }
+  return out;
 }
 
 export function totalPerformance(byAccount: Entry[][], from: string, to: string): Performance {

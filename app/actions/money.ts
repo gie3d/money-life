@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
-import { getAccount, listTrades } from "@/lib/data";
+import { getAccount, listAccounts, listEntries, listPrices, listTrades } from "@/lib/data";
 import { replay } from "@/lib/investment";
+import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { HEX, isInvestment, LIQUIDITY, TYPES, type Trade } from "@/lib/types";
 import type { FormState } from "./auth";
@@ -122,10 +123,10 @@ async function investmentOf(userId: number, accountId: number) {
   return account && isInvestment(account) ? account : null;
 }
 
-export async function addTrade(accountId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
-  if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
+type TradeInput = Omit<Trade, "id" | "accountId">;
 
+/** Reads and checks the trade fields of a form. */
+function readTrade(form: FormData): TradeInput | { error: string } {
   const side = form.get("side") === "sell" ? "sell" : "buy";
   const date = String(form.get("date") ?? "");
   const quantity = num(form.get("quantity"));
@@ -136,15 +137,41 @@ export async function addTrade(accountId: number, _: FormState, form: FormData):
   if (!(quantity > 0)) return { error: "Enter how many units, more than zero." };
   if (!(price >= 0)) return { error: "Enter the price of one unit." };
   if (!(fee >= 0)) return { error: "The fee must be zero or more, or left empty." };
+  return { side, date, quantity, price, fee, note };
+}
+
+export async function addTrade(accountId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
+  const t = readTrade(form);
+  if ("error" in t) return t;
 
   // A sale cannot take out more than was held on that day, or the position would go negative.
-  const trade: Trade = { id: Number.MAX_SAFE_INTEGER, accountId, date, side, quantity, price, fee, note };
-  if (!replay([...(await listTrades(user.id, accountId)), trade]).ok) {
+  if (!replay([...(await listTrades(user.id, accountId)), { ...t, id: Number.MAX_SAFE_INTEGER, accountId }]).ok) {
     return { error: "You can't sell more units than you held at that date." };
   }
   await pool.query(
     "INSERT INTO transactions (account_id, date, side, quantity, price, fee, note) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    [accountId, date, side, quantity, price, fee, note],
+    [accountId, t.date, t.side, t.quantity, t.price, t.fee, t.note],
+  );
+  revalidatePath("/", "layout");
+}
+
+export async function updateTrade(accountId: number, tradeId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const all = await listTrades(user.id, accountId);
+  if (!all.some((x) => x.id === tradeId)) return { error: "That trade no longer exists." };
+  const t = readTrade(form);
+  if ("error" in t) return t;
+
+  // The edited trade may move or shrink a purchase that later sales rely on, or grow a sale too far.
+  const next = all.map((x) => (x.id === tradeId ? { ...x, ...t } : x));
+  if (!replay(next).ok) return { error: "That would leave a sale selling more units than you held at that date." };
+
+  await pool.query(
+    `UPDATE transactions t SET date = $3, side = $4, quantity = $5, price = $6, fee = $7, note = $8
+     FROM accounts a WHERE t.id = $1 AND a.id = t.account_id AND a.user_id = $2`,
+    [tradeId, user.id, t.date, t.side, t.quantity, t.price, t.fee, t.note],
   );
   revalidatePath("/", "layout");
 }
@@ -176,6 +203,31 @@ export async function setPrice(accountId: number, _: FormState, form: FormData):
   revalidatePath("/", "layout");
 }
 
+export async function updatePrice(accountId: number, priceId: number | null, _: FormState, form: FormData): Promise<FormState> {
+  // A price that came from a trade has no row of its own yet: saving it records one for that day.
+  if (priceId === null) return setPrice(accountId, undefined, form);
+
+  const user = await requireUser();
+  if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
+  const date = String(form.get("date") ?? "");
+  const price = num(form.get("price"));
+  if (!isDate(date)) return { error: "Pick a date." };
+  if (!(price >= 0)) return { error: "Enter the price of one unit." };
+
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE prices p SET date = $3, price = $4 FROM accounts a WHERE p.id = $1 AND a.id = p.account_id AND a.user_id = $2",
+      [priceId, user.id, date, price],
+    );
+    if (!rowCount) return { error: "That price no longer exists." };
+  } catch (err) {
+    // One price per day: moving this one onto a day that already has its own is refused.
+    if ((err as { code?: string }).code === "23505") return { error: "A price is already recorded for that date. Edit that one instead." };
+    throw err;
+  }
+  revalidatePath("/", "layout");
+}
+
 export async function deletePrice(priceId: number) {
   const user = await requireUser();
   await pool.query(
@@ -190,5 +242,58 @@ export async function setCategoryColor(categoryId: number, _: FormState, form: F
   const color = String(form.get("color") ?? "");
   if (!HEX.test(color)) return { error: "Pick a colour." };
   await pool.query("UPDATE categories SET color = $3 WHERE id = $1 AND user_id = $2", [categoryId, user.id, color.toLowerCase()]);
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Brings every asset's current value up to date in one go, all on one date: a price per unit for an
+ * investment, a balance for cash or saving. A field left as it was, or empty, changes nothing.
+ */
+export async function updateValues(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const date = String(form.get("date") ?? "");
+  if (!isDate(date)) return { error: "Pick a date." };
+
+  const accounts = await listAccounts(user.id);
+  const known = holdings(accounts, await listEntries(user.id), await listTrades(user.id), await listPrices(user.id));
+  const changes: { account: (typeof accounts)[number]; value: number }[] = [];
+
+  for (const account of accounts) {
+    const raw = form.get(`v-${account.id}`);
+    if (raw === null || String(raw).trim() === "") continue;
+    const value = num(raw);
+    if (!(value >= 0)) return { error: `Check the value for ${account.name}.` };
+    const h = known.find((x) => x.account.id === account.id);
+    // Only a position with units can be priced; and an unchanged number needs no new record.
+    if (isInvestment(account) && !h) continue;
+    const current = isInvestment(account) ? h?.price : h?.value;
+    if (current != null && Math.abs(value - current) < 1e-9) continue;
+    changes.push({ account, value });
+  }
+  if (changes.length === 0) return { error: "Change at least one value first." };
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const { account, value } of changes) {
+      if (isInvestment(account)) {
+        await client.query(
+          "INSERT INTO prices (account_id, date, price) VALUES ($1, $2, $3) ON CONFLICT (account_id, date) DO UPDATE SET price = $3",
+          [account.id, date, value],
+        );
+      } else {
+        await client.query(
+          "INSERT INTO entries (account_id, date, value) VALUES ($1, $2, $3) ON CONFLICT (account_id, date) DO UPDATE SET value = $3",
+          [account.id, date, value],
+        );
+      }
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
   revalidatePath("/", "layout");
 }

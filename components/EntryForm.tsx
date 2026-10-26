@@ -3,6 +3,7 @@
 import { useActionState, useRef } from "react";
 import { addEntry } from "@/app/actions/money";
 import DatePicker from "./DatePicker";
+import NumberInput from "./NumberInput";
 import type { FormState } from "@/app/actions/auth";
 
 export default function EntryForm({ accountId, currency }: { accountId: number; currency: string }) {
@@ -23,7 +24,7 @@ export default function EntryForm({ accountId, currency }: { accountId: number; 
         </div>
         <label className="block space-y-1.5">
           <span className="eyebrow">Balance ({currency})</span>
-          <input name="value" inputMode="decimal" required placeholder="0" className="field" />
+          <NumberInput name="value" required placeholder="0" className="field" />
         </label>
       </div>
       <label className="block space-y-1.5">

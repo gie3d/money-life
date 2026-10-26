@@ -20,6 +20,8 @@ export type Entry = {
   value: number;
   /** Net money paid in since the previous entry; negative for a withdrawal. */
   contribution: number;
+  /** Cost of what is held on that date; set for investments, absent for a plain balance. */
+  cost?: number;
   note: string | null;
 };
 

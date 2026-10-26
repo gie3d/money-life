@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import AccountForm from "@/components/AccountForm";
-import CategoryManager from "@/components/CategoryManager";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money } from "@/lib/format";
 import { holdings } from "@/lib/portfolio";
@@ -17,8 +16,6 @@ export default async function AccountsPage() {
     listAccounts(user.id, true), listEntries(user.id), listCategories(user.id), listTrades(user.id), listPrices(user.id),
   ]);
   const held = holdings(accounts, entries, trades, prices);
-  const usage: Record<number, number> = {};
-  for (const a of accounts) usage[a.categoryId] = (usage[a.categoryId] ?? 0) + 1;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -44,7 +41,6 @@ export default async function AccountsPage() {
         </section>
       )}
       <AccountForm categories={categories} />
-      <CategoryManager categories={categories} usage={usage} />
     </div>
   );
 }

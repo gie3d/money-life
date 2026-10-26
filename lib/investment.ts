@@ -51,6 +51,20 @@ export function latestPrice(trades: Trade[], prices: PricePoint[]): { price: num
   return date ? { price: seen.get(date)!, date } : null;
 }
 
+export type PriceRow = { date: string; price: number; source: "trade" | "manual"; /** Only a manual price can be deleted by id. */ id?: number };
+
+/**
+ * Every known price of one unit, newest first: the price of each trade on its day, with a
+ * price entered by hand taking the place of the trade's on the same day. This is the same
+ * rule latestPrice() uses, so the history lists exactly what the valuation is built from.
+ */
+export function priceHistory(trades: Trade[], prices: PricePoint[]): PriceRow[] {
+  const byDate = new Map<string, PriceRow>();
+  for (const t of [...trades].sort(order)) byDate.set(t.date, { date: t.date, price: t.price, source: "trade" });
+  for (const p of prices) byDate.set(p.date, { date: p.date, price: p.price, source: "manual", id: p.id });
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
 /**
  * Dated values for an investment, in the same shape as a balance's entries, so the
  * performance and net-worth code can treat both alike. `contribution` is the cash
@@ -66,7 +80,8 @@ export function investmentEntries(accountId: number, trades: Trade[], prices: Pr
     const flow = trades
       .filter((t) => t.date === date)
       .reduce((s, t) => s + (t.side === "buy" ? 1 : -1) * tradeCash(t), 0);
-    out.push({ id: 0, accountId, date, value: replay(upTo).quantity * price.price, contribution: flow, note: null });
+    const held = replay(upTo);
+    out.push({ id: 0, accountId, date, value: held.quantity * price.price, contribution: flow, cost: held.cost, note: null });
   }
   return out;
 }

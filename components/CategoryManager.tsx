@@ -5,9 +5,21 @@ import { createCategory, deleteCategory, renameCategory, setCategoryColor } from
 import ColorPicker from "./ColorPicker";
 import ConfirmDelete from "./ConfirmDelete";
 import type { FormState } from "@/app/actions/auth";
+import { money } from "@/lib/format";
 import { labelOf, nextColor, TYPES, type Category } from "@/lib/types";
 
-export default function CategoryManager({ categories, usage }: { categories: Category[]; usage: Record<number, number> }) {
+export default function CategoryManager({
+  categories,
+  usage,
+  totals,
+  currency,
+}: {
+  categories: Category[];
+  usage: Record<number, number>;
+  /** Current value of the active assets in each category. */
+  totals: Record<number, number>;
+  currency: string;
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(createCategory, undefined);
 
   return (
@@ -18,9 +30,15 @@ export default function CategoryManager({ categories, usage }: { categories: Cat
           Your own groups for assets, like Thai stocks or Gold. Pick its type when you create it: Cash and Saving keep a balance; Investment keeps buys and sells and shows profit or loss. The type can&apos;t be changed afterwards. The colour is used in the charts.
         </p>
       </div>
+      {categories.length > 0 && (
+        <div className="flex items-center justify-between border-b border-line pb-2">
+          <p className="eyebrow">All categories</p>
+          <p className="num font-bold">{money(Object.values(totals).reduce((a, b) => a + b, 0), currency)}</p>
+        </div>
+      )}
       <ul className="divide-y divide-line">
         {categories.map((c) => (
-          <CategoryRow key={c.id} category={c} used={usage[c.id] ?? 0} />
+          <CategoryRow key={c.id} category={c} used={usage[c.id] ?? 0} total={totals[c.id] ?? 0} currency={currency} />
         ))}
       </ul>
       <form action={action} className="flex flex-col gap-2 sm:flex-row">
@@ -36,7 +54,7 @@ export default function CategoryManager({ categories, usage }: { categories: Cat
   );
 }
 
-function CategoryRow({ category, used }: { category: Category; used: number }) {
+function CategoryRow({ category, used, total, currency }: { category: Category; used: number; total: number; currency: string }) {
   const [state, rename] = useActionState<FormState, FormData>(renameCategory.bind(null, category.id), undefined);
   const [colorState, recolor] = useActionState<FormState, FormData>(setCategoryColor.bind(null, category.id), undefined);
   return (
@@ -58,6 +76,7 @@ function CategoryRow({ category, used }: { category: Category; used: number }) {
         </form>
         <span className="rounded-lg bg-surface-2 px-2 py-1.5 text-sm text-ink-2">{labelOf(TYPES, category.type)}</span>
         <span className="hidden w-16 text-right text-xs text-ink-3 sm:block">{used} {used === 1 ? "asset" : "assets"}</span>
+        <span className="num w-32 text-right text-sm font-semibold">{money(total, currency)}</span>
         {used === 0 ? (
           <ConfirmDelete
             action={deleteCategory.bind(null, category.id)}

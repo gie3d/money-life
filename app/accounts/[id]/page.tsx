@@ -2,14 +2,19 @@ import { notFound } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import ConfirmDelete from "@/components/ConfirmDelete";
 import DeleteTradeButton from "@/components/DeleteTradeButton";
+import EditPriceButton from "@/components/EditPriceButton";
+import EditTradeButton from "@/components/EditTradeButton";
 import EntryForm from "@/components/EntryForm";
+import ProfitChart from "@/components/ProfitChart";
 import PriceForm from "@/components/PriceForm";
 import TradeForm from "@/components/TradeForm";
 import { deleteAccount, deleteEntry, deletePrice, setArchived } from "@/app/actions/money";
 import { getAccount, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
-import { tradeCash } from "@/lib/investment";
-import { holdings } from "@/lib/portfolio";
+import { priceHistory, tradeCash } from "@/lib/investment";
+import NetWorthChart from "@/components/NetWorthChart";
+import { extendTo, netWorthSeries } from "@/lib/performance";
+import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
@@ -33,6 +38,8 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
     investment ? listPrices(user.id, account.id) : [],
   ]);
   const h = holdings([account], entries, trades, prices)[0];
+  const history = priceHistory(trades, prices);
+  const series = extendTo(netWorthSeries([accountEntries(account, entries, trades, prices)], null, "9999-12-31"), new Date().toISOString().slice(0, 10));
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -57,6 +64,22 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
           <Figure label="Cost of units held" value={money(h.cost, cur)} />
           <Figure label="Profit / loss" value={signedMoney(h.pl ?? 0, cur)} hint={pct(h.plPct)} cls={tone(h.pl ?? 0)} />
           <Figure label="Realized from sales" value={signedMoney(h.realized, cur)} cls={tone(h.realized)} />
+        </section>
+      )}
+
+      {series.length > 0 && (
+        <section className="card p-4 sm:p-6">
+          <h2 className="mb-3 text-lg">{investment ? "Value and cost" : "Balance over time"}</h2>
+          <NetWorthChart data={series} currency={cur} title={account.name} showCost={investment} />
+          {investment && <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you hold cost, fees included.</p>}
+        </section>
+      )}
+
+      {investment && series.length > 0 && (
+        <section className="card p-4 sm:p-6">
+          <h2 className="mb-3 text-lg">Profit over time</h2>
+          <ProfitChart data={series} currency={cur} title={`${account.name} profit`} />
+          <p className="mt-2 text-xs text-ink-3">Profit is the current value minus what the units you hold cost, fees included. It is the gap between the two lines above.</p>
         </section>
       )}
 
@@ -105,30 +128,39 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
               </div>
               <div className="text-right">
                 <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
-                <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur, { maximumFractionDigits: 2 })} fee`}</p>
+                <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
               </div>
+              <EditTradeButton trade={t} currency={cur} label={`Edit ${t.side} on ${day(t.date)}`} />
               <DeleteTradeButton accountId={account.id} tradeId={t.id} label={`Delete ${t.side} on ${day(t.date)}`} />
             </div>
           ))}
         </section>
       )}
 
-      {investment && prices.length > 0 && (
+      {investment && history.length > 0 && (
         <section className="card divide-y divide-line">
           <h2 className="p-4 text-lg sm:px-6">Price history</h2>
-          {[...prices].reverse().map((p) => (
-            <div key={p.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
-              <p className="flex-1 font-semibold">{day(p.date)}</p>
+          {history.map((p) => (
+            <div key={p.date} className="flex items-center gap-3 px-4 py-3 sm:px-6">
+              <div className="flex-1">
+                <p className="font-semibold">{day(p.date)}</p>
+                <p className="text-xs text-ink-3">{p.source === "trade" ? "From a trade" : "Entered by hand"}</p>
+              </div>
               <p className="num font-semibold">{unitPrice(p.price, cur)}</p>
-              <ConfirmDelete
-                action={deletePrice.bind(null, p.id)}
-                title="Delete this price?"
-                message={`The price of ${unitPrice(p.price, cur)} on ${day(p.date)} will be removed.`}
-                triggerLabel={`Delete price from ${day(p.date)}`}
-                triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2"
-              >
-                ×
-              </ConfirmDelete>
+              <EditPriceButton accountId={account.id} row={p} currency={cur} />
+              {p.id !== undefined ? (
+                <ConfirmDelete
+                  action={deletePrice.bind(null, p.id)}
+                  title="Delete this price?"
+                  message={`The price of ${unitPrice(p.price, cur)} on ${day(p.date)} will be removed.`}
+                  triggerLabel={`Delete price from ${day(p.date)}`}
+                  triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2"
+                >
+                  ×
+                </ConfirmDelete>
+              ) : (
+                <span className="size-8" title="Comes from a trade: edit or delete the trade instead" />
+              )}
             </div>
           ))}
         </section>

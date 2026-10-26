@@ -8,6 +8,7 @@ import { logout } from "@/app/actions/auth";
 const TABS = [
   { href: "/", label: "Overview" },
   { href: "/accounts", label: "Assets" },
+  { href: "/categories", label: "Categories" },
 ] as const;
 
 const THEME_EVENT = "ml-theme-change";

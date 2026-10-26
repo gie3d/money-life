@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-portfolio.mjs
 import assert from "node:assert/strict";
-import { investmentEntries, latestPrice, replay } from "../lib/investment.ts";
+import { investmentEntries, latestPrice, priceHistory, replay } from "../lib/investment.ts";
 import { holdings, slices } from "../lib/portfolio.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`);
@@ -32,9 +32,13 @@ const t1 = [tr(1, "2026-01-01", "buy", 10, 100)];
 assert.deepEqual(latestPrice(t1, []), { price: 100, date: "2026-01-01" });
 assert.deepEqual(latestPrice(t1, [px(1, "2026-02-01", 120)]), { price: 120, date: "2026-02-01" });
 
+// Price history: trade prices appear on their day, and a manual price replaces the trade's that day.
+const ph = priceHistory([tr(1, "2026-01-01", "buy", 1, 100), tr(1, "2026-02-01", "buy", 1, 110)], [{ id: 7, accountId: 1, date: "2026-02-01", price: 115 }, { id: 8, accountId: 1, date: "2026-03-01", price: 120 }]);
+assert.deepEqual(ph.map((r) => [r.date, r.price, r.source]), [["2026-03-01", 120, "manual"], ["2026-02-01", 115, "manual"], ["2026-01-01", 100, "trade"]]);
+
 // Entries for charts: value = units x price, contribution = cash in/out that day.
 const es = investmentEntries(1, [...t1, tr(1, "2026-03-01", "sell", 4, 130)], [px(1, "2026-02-01", 120)]);
-assert.deepEqual(es.map((e) => [e.date, e.value, e.contribution]), [["2026-01-01", 1000, 1000], ["2026-02-01", 1200, 0], ["2026-03-01", 780, -520]]);
+assert.deepEqual(es.map((e) => [e.date, e.value, e.contribution, e.cost]), [["2026-01-01", 1000, 1000, 1000], ["2026-02-01", 1200, 0, 1000], ["2026-03-01", 780, -520, 600]]);
 
 // Holdings: balances have no P/L; investments do.
 const accounts = [acc(1, "investment", "stocks"), acc(2, "cash", "cash"), acc(3, "investment", "gold")];

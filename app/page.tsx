@@ -1,14 +1,15 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import NetWorthChart from "@/components/NetWorthChart";
+import UpdateValues, { type ValueRow } from "@/components/UpdateValues";
 import PieCard from "@/components/PieCard";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
-import { netWorthSeries, periodStart, PERIODS, totalPerformance, type Period } from "@/lib/performance";
+import { extendTo, netWorthSeries, periodStart, PERIODS, totalPerformance, type Period } from "@/lib/performance";
 import { accountEntries, holdings, slices } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
+import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
 export default async function Overview({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
@@ -36,6 +37,20 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
     );
   }
 
+  // One row per asset that can be given a new value: any cash or saving balance, and any investment with units.
+  const valueRows: ValueRow[] = accounts.flatMap((a) => {
+    const h = rows.find((x) => x.account.id === a.id);
+    if (isInvestment(a) && !h) return [];
+    return [{
+      id: a.id,
+      name: a.name,
+      color: a.categoryColor,
+      investment: isInvestment(a),
+      units: h?.quantity ?? null,
+      current: h ? (h.investment ? h.price : h.value) : null,
+    }];
+  });
+
   const totalValue = rows.reduce((s, h) => s + h.value, 0);
   // Profit and loss exist only for investments; cash and saving are just a balance.
   const invs = rows.filter((h) => h.investment);
@@ -59,12 +74,15 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
   // Never reach back past the first record: a "1Y" view of a 2-month-old tracker is 2 months.
   const start = from && from > firstDate ? from : firstDate;
   const perf = totalPerformance(invLists, start, today);
-  const series = netWorthSeries(lists, start, today);
-  const invSeries = netWorthSeries(invLists, start, today);
+  const series = extendTo(netWorthSeries(lists, start, today), today);
+  const invSeries = extendTo(netWorthSeries(invLists, start, today), today);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview" }]} />
+      <div className="flex items-center justify-between gap-3">
+        <Breadcrumb items={[{ label: "Overview" }]} />
+        <UpdateValues rows={valueRows} currency={cur} />
+      </div>
       <section className="rounded-[28px] bg-gradient-to-br from-[var(--hero-a)] via-[var(--hero-b)] to-[var(--hero-c)] p-6 text-white sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total value of all assets</p>
         <p className="num mt-1 text-4xl font-extrabold sm:text-5xl">{money(totalValue, cur)}</p>
@@ -156,7 +174,7 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
 
       <section className="card p-4 sm:p-6">
         <h2 className="mb-3 text-lg">Total value since {day(start)}</h2>
-        <NetWorthChart data={series} currency={cur} />
+        <NetWorthChart data={series} currency={cur} title="Total value" />
       </section>
 
       {invs.length > 0 && (
@@ -167,8 +185,8 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
             <Stat label="Gain" value={signedMoney(perf.gain, cur)} cls={tone(perf.gain)} />
             <Stat label="Return" value={pct(perf.returnPct)} cls={tone(perf.returnPct ?? 0)} />
           </div>
-          <NetWorthChart data={invSeries} currency={cur} showInvested />
-          <p className="mt-2 text-xs text-ink-3">Buys count as money paid in and sales as money taken out. The dashed line is the net money put in; the gap above it is performance. Return is time-weighted, so it differs from the profit on cost above.</p>
+          <NetWorthChart data={invSeries} currency={cur} title="Investment performance" showCost />
+          <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you still hold cost, fees included; the gap above it is profit. Return is time-weighted, so it differs from the profit on cost above.</p>
         </section>
       )}
     </div>
