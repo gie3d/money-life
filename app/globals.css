@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Palette shared with my-running-diary: a grey page, white cards,
+   near-black ink, and the same vermilion brand. Green and red are
+   reserved for gain and loss and never used decoratively.
+   --------------------------------------------------------------- */
+
+:root {
+  --ground: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --ink: #1d1d1f;
+  --ink-2: #48484d;
+  --ink-3: #6e6e73;
+  --line: #e5e5ea;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 24px rgba(0, 0, 0, 0.05);
+
+  --brand: #fd6217;
+  --brand-dk: #c94a0a;
+  --brand-soft: #fff0e6;
+
+  --go: #34c759;
+  --go-soft: #e6f7ea;
+  --go-text: #248a3d;
+
+  --sky: #0a84ff;
+  --sky-soft: #e5f1ff;
+
+  --miss: #ff3b30;
+  --miss-soft: #ffebea;
+  --miss-text: #d70015;
+
+  --hero-a: #f86a1f;
+  --hero-b: #ee4a2b;
+  --hero-c: #d4336a;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #000000;
+    --surface: #1c1c1e;
+    --surface-2: #2c2c2e;
+    --ink: #f5f5f7;
+    --ink-2: #c7c7cc;
+    --ink-3: #98989d;
+    --line: #38383a;
+    --card-shadow: none;
+    --brand: #ff7a33;
+    --brand-dk: #c95413;
+    --brand-soft: #3a1f10;
+    --go: #30d158;
+    --go-soft: #13281a;
+    --go-text: #30d158;
+    --sky: #64b5ff;
+    --sky-soft: #0f2238;
+    --miss: #ff453a;
+    --miss-soft: #3a1715;
+    --miss-text: #ff6961;
+    --hero-a: #d9822b;
+    --hero-b: #d94e12;
+    --hero-c: #b52f58;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --ink: #f5f5f7;
+  --ink-2: #c7c7cc;
+  --ink-3: #98989d;
+  --line: #38383a;
+  --card-shadow: none;
+  --brand: #ff7a33;
+  --brand-dk: #c95413;
+  --brand-soft: #3a1f10;
+  --go: #30d158;
+  --go-soft: #13281a;
+  --go-text: #30d158;
+  --sky: #64b5ff;
+  --sky-soft: #0f2238;
+  --miss: #ff453a;
+  --miss-soft: #3a1715;
+  --miss-text: #ff6961;
+  --hero-a: #d9822b;
+  --hero-b: #d94e12;
+  --hero-c: #b52f58;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-dk: var(--brand-dk);
+  --color-brand-soft: var(--brand-soft);
+  --color-go: var(--go);
+  --color-go-soft: var(--go-soft);
+  --color-go-text: var(--go-text);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-miss: var(--miss);
+  --color-miss-soft: var(--miss-soft);
+  --color-miss-text: var(--miss-text);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--ground);
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--surface);
+    border-radius: 24px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    color: #fff;
+    background: var(--brand);
+    cursor: pointer;
+    transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+
+  .btn-quiet {
+    color: var(--ink);
+    background: var(--surface-2);
+  }
+
+  .field {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border-radius: 14px;
+    background: var(--surface-2);
+    border: 1px solid transparent;
+    color: var(--ink);
+    font-size: 1rem;
+  }
+  .field:focus { outline: none; border-color: var(--brand); }
+}
+
+:where(a, button, [tabindex]):focus-visible {
+  outline: 3px solid var(--sky);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
