@@ -1,6 +1,6 @@
 import "server-only";
 import { pool } from "./db";
-import type { Account, Category, Entry, PricePoint, Trade } from "./types";
+import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Trade } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -87,4 +87,46 @@ export async function listPrices(userId: number, accountId?: number): Promise<Pr
     accountId ? [userId, accountId] : [userId],
   );
   return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: Number(r.price) }));
+}
+
+const toPlan = (r: Record<string, unknown>): Plan => ({ id: Number(r.id), name: r.name as string, monthlySaving: Number(r.monthly_saving) });
+
+export async function listPlans(userId: number): Promise<Plan[]> {
+  const { rows } = await pool.query("SELECT id, name, monthly_saving FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
+  return rows.map(toPlan);
+}
+
+export async function getPlan(userId: number, id: number): Promise<Plan | null> {
+  const { rows } = await pool.query("SELECT id, name, monthly_saving FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
+  return rows[0] ? toPlan(rows[0]) : null;
+}
+
+/** The costs of one plan, or of all the user's plans. */
+export async function listPlanItems(userId: number, planId?: number): Promise<PlanItem[]> {
+  const { rows } = await pool.query(
+    `SELECT i.id, i.plan_id, i.name, i.amount, i.frequency, i.start_date::text AS start_date, i.occurrences
+     FROM plan_items i JOIN plans p ON p.id = i.plan_id
+     WHERE p.user_id = $1 ${planId ? "AND p.id = $2" : ""} ORDER BY i.start_date, i.id`,
+    planId ? [userId, planId] : [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    planId: Number(r.plan_id),
+    name: r.name as string,
+    amount: Number(r.amount),
+    frequency: r.frequency as Frequency,
+    startDate: r.start_date as string,
+    occurrences: Number(r.occurrences),
+  }));
+}
+
+/** Which assets pay for which plan: plan id to account ids. */
+export async function listPlanAssets(userId: number): Promise<Map<number, number[]>> {
+  const { rows } = await pool.query(
+    "SELECT pa.plan_id, pa.account_id FROM plan_assets pa JOIN plans p ON p.id = pa.plan_id WHERE p.user_id = $1",
+    [userId],
+  );
+  const out = new Map<number, number[]>();
+  for (const r of rows) out.set(Number(r.plan_id), [...(out.get(Number(r.plan_id)) ?? []), Number(r.account_id)]);
+  return out;
 }

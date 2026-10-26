@@ -85,3 +85,25 @@ export const labelOf = (list: readonly { id: string; label: string }[], id: stri
   list.find((x) => x.id === id)?.label ?? id;
 
 export const CURRENCIES = ["THB", "USD", "EUR", "GBP", "JPY", "SGD", "AUD", "CAD"] as const;
+
+export type Plan = { id: number; name: string; monthlySaving: number };
+
+export const FREQUENCIES = [
+  { id: "once", label: "One time" },
+  { id: "monthly", label: "Every month" },
+  { id: "yearly", label: "Every year" },
+] as const;
+
+export type Frequency = (typeof FREQUENCIES)[number]["id"];
+
+export type PlanItem = {
+  id: number;
+  planId: number;
+  name: string;
+  amount: number;
+  frequency: Frequency;
+  /** ISO date of the first (or only) payment. */
+  startDate: string;
+  /** How many payments, counting the first. Always 1 for a one-time cost. */
+  occurrences: number;
+};

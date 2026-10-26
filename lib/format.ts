@@ -31,3 +31,7 @@ export const units = (n: number) => new Intl.NumberFormat("en-US", { maximumFrac
 
 /** A number as plain text for an input: no exponent form, no float noise. */
 export const plainNumber = (n: number) => (String(n).includes("e") ? n.toFixed(8).replace(/\.?0+$/, "") : String(n));
+
+/** "2026-12" as "Dec 2026". */
+export const monthLabel = (month: string) =>
+  new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });

@@ -48,6 +48,12 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
+/** Signs the user out everywhere else: every session but the one making this request. */
+export async function revokeOtherSessions(userId: number) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  await pool.query("DELETE FROM sessions WHERE user_id = $1 AND token_hash IS DISTINCT FROM $2", [userId, token ? sha(token) : null]);
+}
+
 /** The signed-in user, or null. Memoised per request. */
 export const getUser = cache(async (): Promise<User | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
