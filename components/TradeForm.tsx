@@ -7,7 +7,7 @@ import { addTrade } from "@/app/actions/money";
 import TradeFields from "./TradeFields";
 import type { FormState } from "@/app/actions/auth";
 
-type Target = { id: number; name: string; archived: boolean };
+type Target = { id: number; name: string; archived: boolean; categoryId: number; category: string };
 
 export default function TradeForm({ accountId, currency, trades, transferTargets }: { accountId: number; currency: string; trades: Trade[]; transferTargets: Target[] }) {
   // A new total replaces one already on its day, so that one is left out of what was held.

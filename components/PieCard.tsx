@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { money } from "@/lib/format";
 import FullscreenButton from "./FullscreenButton";
 
 export type PieSlice = { id: string; label: string; value: number; color: string };
 
+type Show = "percent" | "amount";
+
 export default function PieCard({ title, subtitle, slices, currency }: { title: string; subtitle: string; slices: PieSlice[]; currency: string }) {
   const total = slices.reduce((s, x) => s + x.value, 0);
+  const [show, setShow] = useState<Show>("percent");
 
   return (
     <section className="card p-4 sm:p-5">
@@ -17,21 +21,34 @@ export default function PieCard({ title, subtitle, slices, currency }: { title: 
           <p className="text-xs text-ink-3">{subtitle}</p>
         </div>
         {total > 0 && (
-          <FullscreenButton title={title}>
-            <PieBody title={title} slices={slices} total={total} currency={currency} large />
-          </FullscreenButton>
+          <>
+            <div role="group" aria-label={`${title}: show as`} className="flex shrink-0 gap-0.5 rounded-full bg-surface-2 p-0.5">
+              {(["percent", "amount"] as const).map((m) => (
+                <button key={m} type="button" aria-pressed={show === m} onClick={() => setShow(m)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${show === m ? "bg-ink text-surface" : "text-ink-3"}`}>
+                  {m === "percent" ? "%" : currency}
+                </button>
+              ))}
+            </div>
+            <FullscreenButton title={title}>
+              <PieBody title={title} slices={slices} total={total} currency={currency} show={show} large />
+            </FullscreenButton>
+          </>
         )}
       </div>
       {total <= 0 ? (
         <p className="py-12 text-center text-sm text-ink-3">Nothing to show yet.</p>
       ) : (
-        <PieBody title={title} slices={slices} total={total} currency={currency} />
+        <PieBody title={title} slices={slices} total={total} currency={currency} show={show} />
       )}
     </section>
   );
 }
 
-function PieBody({ title, slices, total, currency, large = false }: { title: string; slices: PieSlice[]; total: number; currency: string; large?: boolean }) {
+function PieBody({ title, slices, total, currency, show, large = false }: {
+  title: string; slices: PieSlice[]; total: number; currency: string; show: Show; large?: boolean;
+}) {
+  const pct = (v: number) => `${((v / total) * 100).toFixed(1)}%`;
   return (
     <div className={large ? "grid h-full gap-6 md:grid-cols-[1fr_22rem]" : ""}>
       <div className={large ? "min-h-72" : "h-44"} role="img" aria-label={`${title}: ${slices.map((s) => `${s.label} ${((s.value / total) * 100).toFixed(0)}%`).join(", ")}`}>
@@ -54,10 +71,18 @@ function PieBody({ title, slices, total, currency, large = false }: { title: str
           <li key={s.id} className="flex items-center gap-2">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
             <span className="min-w-0 flex-1 truncate">{s.label}</span>
-            {large && <span className="num text-ink-3">{money(s.value, currency)}</span>}
-            <span className="num font-semibold">{((s.value / total) * 100).toFixed(1)}%</span>
+            {/* Full screen has room for both: the other figure goes alongside, quieter. */}
+            {large && <span className="num text-ink-3">{show === "amount" ? pct(s.value) : money(s.value, currency)}</span>}
+            <span className="num font-semibold">{show === "amount" ? money(s.value, currency) : pct(s.value)}</span>
           </li>
         ))}
+        {show === "amount" && (
+          <li className="flex items-center gap-2 border-t border-line pt-1.5">
+            <span className="size-2.5 shrink-0" />
+            <span className="min-w-0 flex-1 font-semibold">Total</span>
+            <span className="num font-bold">{money(total, currency)}</span>
+          </li>
+        )}
       </ul>
     </div>
   );

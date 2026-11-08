@@ -13,6 +13,7 @@ import ProfitChart from "@/components/ProfitChart";
 import PriceForm from "@/components/PriceForm";
 import TradeForm from "@/components/TradeForm";
 import { deleteAccount, deleteEntry, deletePrice, setArchived, updateNotes } from "@/app/actions/money";
+import { sortByCategory } from "@/lib/group";
 import { getAccount, listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
 import { priceHistory, tradeCash } from "@/lib/investment";
@@ -44,9 +45,8 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
     listAccounts(user.id, true),
   ]);
   // Other investments, to send units to (archived ones only to name past transfers).
-  const transferTargets = allAccounts
-    .filter((a) => a.id !== account.id && isInvestment(a))
-    .map((a) => ({ id: a.id, name: a.name, archived: a.archived }));
+  const transferTargets = sortByCategory(allAccounts.filter((a) => a.id !== account.id && isInvestment(a)), (a) => a.categoryId, categories)
+    .map((a) => ({ id: a.id, name: a.name, archived: a.archived, categoryId: a.categoryId, category: a.categoryName }));
   const nameOf = (id: number) => allAccounts.find((a) => a.id === id)?.name ?? "a deleted asset";
   const h = holdings([account], entries, trades, prices)[0];
   const history = priceHistory(trades, prices);
@@ -148,7 +148,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
           <PriceForm accountId={account.id} currency={cur} />
         </div>
       ) : (
-        <EntryForm accountId={account.id} currency={cur} />
+        <EntryForm accountId={account.id} currency={cur} entries={entries.map((e) => ({ date: e.date, value: e.value }))} />
       )}
 
       {!investment && entries.length > 0 && (
@@ -160,7 +160,14 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
                 <p className="font-semibold">{day(e.date)}</p>
                 {e.note && <p className="truncate text-xs text-ink-3">{e.note}</p>}
               </div>
-              <p className="num font-semibold">{money(e.value, cur)}</p>
+              <div className="text-right">
+                <p className="num font-semibold">{money(e.value, cur)}</p>
+                {e.contribution !== 0 && (
+                  <p className={`num text-xs ${e.contribution > 0 ? "text-go-text" : "text-miss-text"}`}>
+                    {e.contribution > 0 ? "Deposited" : "Withdrew"} {money(Math.abs(e.contribution), cur)}
+                  </p>
+                )}
+              </div>
               <ConfirmDelete
                 action={deleteEntry.bind(null, e.id)}
                 title="Delete this balance?"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import DatePicker from "./DatePicker";
 import NumberInput from "./NumberInput";
 import { money, plainNumber, unitPrice, units as fmtUnits } from "@/lib/format";
+import { groupBy } from "@/lib/group";
 import type { Trade } from "@/lib/types";
 
 /** A number as text without float noise or trailing zeros. */
@@ -24,7 +25,7 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
   /** Units held and their cost at the end of a day, before any total on it. Given when recording a new trade, it adds the "Total" choice. */
   heldOn?: (date: string) => { quantity: number; cost: number };
   /** The user's other investments, to send units to. Some given, on a new trade, adds the "Transfer" choice. */
-  transferTargets?: { id: number; name: string; archived: boolean }[];
+  transferTargets?: { id: number; name: string; archived: boolean; categoryId: number; category: string }[];
 }) {
   type Side = "buy" | "sell" | "total" | "transfer";
   const [side, setSide] = useState<Side>(trade?.transfer ? "transfer" : trade?.total ? "total" : (trade?.side ?? "buy"));
@@ -98,8 +99,10 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
                 <span className="eyebrow">Send to</span>
                 <select name="to" required defaultValue={trade?.transfer?.otherAccountId ?? ""} className="field">
                   <option value="" disabled>Pick an asset</option>
-                  {transferTargets.filter((a) => !a.archived || a.id === trade?.transfer?.otherAccountId).map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                  {groupBy(transferTargets.filter((a) => !a.archived || a.id === trade?.transfer?.otherAccountId), (a) => a.categoryId).map(({ key, items }) => (
+                    <optgroup key={key} label={items[0].category}>
+                      {items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </optgroup>
                   ))}
                 </select>
               </label>

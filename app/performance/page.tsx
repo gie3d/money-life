@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import NetWorthChart from "@/components/NetWorthChart";
-import { listAccounts, listEntries, listPrices, listTrades } from "@/lib/data";
+import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
 import { accountPerformance, chartYears, extendTo, netWorthSeries, periodStart, PERIODS, totalPerformance, type Performance, type Period } from "@/lib/performance";
@@ -18,8 +18,8 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
   const requested = (PERIODS.find((p) => p.id === sp.period)?.id ?? "3M") as Period;
   const cur = user.currency;
 
-  const [accounts, entries, trades, prices] = await Promise.all([
-    listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id),
+  const [accounts, entries, trades, prices, categories] = await Promise.all([
+    listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id), listCategories(user.id),
   ]);
   const rows = holdings(accounts, entries, trades, prices);
 
@@ -78,6 +78,14 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
     .sort((a, b) => (by === "liquidity"
       ? LIQUIDITY.findIndex((l) => l.id === a.key) - LIQUIDITY.findIndex((l) => l.id === b.key)
       : b.p.gain - a.p.gain));
+  // In the asset view, assets sit under their category (in the categories' own order) with its subtotal.
+  const assetGroups = by !== "asset" ? [] : categories
+    .map((category) => {
+      const assets = perfRows.filter((r) => r.members[0].account.categoryId === category.id);
+      const idx = invIdx.filter((i) => rows[i].account.categoryId === category.id);
+      return { category, assets, p: totalPerformance(idx.map((i) => lists[i]), start, end) };
+    })
+    .filter((g) => g.assets.length > 0);
   const windowQuery = year ? `year=${year}` : `period=${period}`;
   const byQuery = by === "asset" ? "" : `&by=${by}`;
 
@@ -148,37 +156,49 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
                   <th className="py-2 pr-4 text-right sm:pr-6">Return</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
-                {perfRows.map(({ key, members, p }) => {
-                  const first = members[0].account;
-                  const count = `${members.length} ${members.length === 1 ? "asset" : "assets"}`;
-                  return (
-                    <tr key={key}>
-                      <td className="py-3 pl-4 font-semibold sm:pl-6">
-                        {by === "asset" ? (
-                          <>
-                            <Link href={`/accounts/${first.id}${year ? `?year=${year}` : ""}`}>{first.name}</Link>
-                            <span className="block text-xs font-normal text-ink-3">{first.categoryName}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="inline-flex items-center gap-2">
-                              <span className="size-2.5 rounded-full" style={{ background: by === "category" ? first.categoryColor : colorFor(key, LIQUIDITY) }} />
-                              {by === "category" ? first.categoryName : labelOf(LIQUIDITY, key)}
-                            </span>
-                            <span className="block text-xs font-normal text-ink-3" title={members.map((h) => h.account.name).join(", ")}>{count}</span>
-                          </>
-                        )}
+              {by === "asset" ? (
+                assetGroups.map((g) => (
+                  <tbody key={g.category.id} className="divide-y divide-line">
+                    <tr className="bg-surface-2 font-bold">
+                      <td className="py-2.5 pl-4 sm:pl-6">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="size-2.5 rounded-full" style={{ background: g.category.color }} />
+                          {g.category.name}
+                          <span className="text-xs font-normal text-ink-3">{g.assets.length} {g.assets.length === 1 ? "asset" : "assets"}</span>
+                        </span>
                       </td>
-                      <td className="num py-3 text-right">{money(p.start, cur)}</td>
-                      <td className="num py-3 text-right">{signedMoney(p.contributions, cur)}</td>
-                      <td className="num py-3 text-right font-semibold">{money(p.end, cur)}</td>
-                      <td className={`num py-3 text-right font-semibold ${tone(p.gain)}`}>{signedMoney(p.gain, cur)}</td>
-                      <td className={`num py-3 pr-4 text-right font-semibold sm:pr-6 ${tone(p.returnPct ?? 0)}`}>{pct(p.returnPct)}</td>
+                      <PerfCells p={g.p} cur={cur} />
                     </tr>
-                  );
-                })}
-              </tbody>
+                    {g.assets.map(({ key, members, p }) => (
+                      <tr key={key}>
+                        <td className="py-3 pl-8 font-semibold sm:pl-10">
+                          <Link href={`/accounts/${members[0].account.id}${year ? `?year=${year}` : ""}`}>{members[0].account.name}</Link>
+                        </td>
+                        <PerfCells p={p} cur={cur} strong />
+                      </tr>
+                    ))}
+                  </tbody>
+                ))
+              ) : (
+                <tbody className="divide-y divide-line">
+                  {perfRows.map(({ key, members, p }) => {
+                    const first = members[0].account;
+                    const count = `${members.length} ${members.length === 1 ? "asset" : "assets"}`;
+                    return (
+                      <tr key={key}>
+                        <td className="py-3 pl-4 font-semibold sm:pl-6">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="size-2.5 rounded-full" style={{ background: by === "category" ? first.categoryColor : colorFor(key, LIQUIDITY) }} />
+                            {by === "category" ? first.categoryName : labelOf(LIQUIDITY, key)}
+                          </span>
+                          <span className="block text-xs font-normal text-ink-3" title={members.map((h) => h.account.name).join(", ")}>{count}</span>
+                        </td>
+                        <PerfCells p={p} cur={cur} strong />
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              )}
               <tfoot>
                 <tr className="border-t border-line font-bold">
                   <td className="py-3 pl-4 sm:pl-6">All investments</td>
@@ -214,6 +234,20 @@ const GROUPINGS = [
 ] as const;
 
 type PerfRow = { key: string; members: Holding[]; p: Performance };
+
+/** The five figures of a performance row: start, net in / out, end, gain and return. */
+function PerfCells({ p, cur, strong = false }: { p: Performance; cur: string; strong?: boolean }) {
+  const py = strong ? "py-3" : "py-2.5";
+  return (
+    <>
+      <td className={`num ${py} text-right`}>{money(p.start, cur)}</td>
+      <td className={`num ${py} text-right`}>{signedMoney(p.contributions, cur)}</td>
+      <td className={`num ${py} text-right ${strong ? "font-semibold" : ""}`}>{money(p.end, cur)}</td>
+      <td className={`num ${py} text-right ${strong ? "font-semibold" : ""} ${tone(p.gain)}`}>{signedMoney(p.gain, cur)}</td>
+      <td className={`num ${py} pr-4 text-right sm:pr-6 ${strong ? "font-semibold" : ""} ${tone(p.returnPct ?? 0)}`}>{pct(p.returnPct)}</td>
+    </>
+  );
+}
 
 function Stat({ label, value, cls = "" }: { label: string; value: string; cls?: string }) {
   return (

@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-plan.mjs
 import assert from "node:assert/strict";
-import { addMonths, payments, schedule } from "../lib/plan.ts";
+import { addMonths, finish, monthsText, payments, schedule } from "../lib/plan.ts";
 
 const item = (id, name, amount, frequency, startDate, occurrences = 1) => ({ id, planId: 1, name, amount, frequency, startDate, occurrences });
 
@@ -42,3 +42,14 @@ assert.equal(mid.past.length, 2);
 assert.equal(mid.remaining, mid.total - 215000);
 assert.equal(schedule([], 5, 0, "2026-10-26").rows.length, 0);
 console.log("ok");
+
+// When a plan finishes: the last payment, months to it, and whether it has passed.
+{
+  const pay = (date) => ({ date, amount: 1, itemId: 1, name: "x" });
+  assert.equal(finish([], "2026-11-08"), null);
+  assert.deepEqual(finish([pay("2027-03-01"), pay("2029-01-15"), pay("2026-12-01")], "2026-11-08"), { date: "2029-01-15", done: false, monthsLeft: 26 });
+  assert.deepEqual(finish([pay("2026-11-20")], "2026-11-08"), { date: "2026-11-20", done: false, monthsLeft: 0 });
+  assert.deepEqual(finish([pay("2026-01-20")], "2026-11-08"), { date: "2026-01-20", done: true, monthsLeft: 0 });
+  assert.equal(monthsText(26), "2 years 2 months"); assert.equal(monthsText(12), "1 year"); assert.equal(monthsText(1), "1 month"); assert.equal(monthsText(0), "this month");
+  console.log("finish ok");
+}

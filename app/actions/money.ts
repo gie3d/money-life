@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
 import { getAccount, listAccounts, listEntries, listPrices, listTradeParts, listTrades } from "@/lib/data";
 import { deriveTrades, replay, TRANSFER_ID_BASE } from "@/lib/investment";
+import { money } from "@/lib/format";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { HEX, isInvestment, LIQUIDITY, TYPES, type Total, type Trade, type Transfer } from "@/lib/types";
@@ -33,23 +34,43 @@ export async function createAccount(_: FormState, form: FormData): Promise<FormS
   redirect(`/accounts/${rows[0].id}`);
 }
 
+/**
+ * Records a balance. "balance" sets the total on that day. "deposit" and "withdraw" take an amount instead: the new
+ * total is the balance as of that day plus or minus it, and the amount is kept as money paid in or taken out, so it
+ * isn't read as a gain or a loss. One snapshot per asset per day: entering the same day again corrects it, and
+ * deposits on the same day add up. Balances recorded after the date are left as they were recorded.
+ */
 export async function addEntry(accountId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const account = await getAccount(user.id, accountId);
   if (!account || isInvestment(account)) return { error: "That asset no longer exists." };
 
+  const mode = String(form.get("mode") ?? "balance");
   const date = String(form.get("date") ?? "");
-  const value = num(form.get("value"));
+  const amount = num(form.get("value"));
   const note = String(form.get("note") ?? "").trim() || null;
+  if (!isDate(date)) return { error: "Pick a date." };
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) return { error: "Pick a date." };
-  if (!Number.isFinite(value) || value < 0) return { error: "Enter the balance on that date." };
+  if (mode === "deposit" || mode === "withdraw") {
+    if (!(amount > 0)) return { error: `Enter how much you ${mode === "deposit" ? "put in" : "took out"}, more than zero.` };
+    const { rows } = await pool.query("SELECT value FROM entries WHERE account_id = $1 AND date <= $2 ORDER BY date DESC LIMIT 1", [accountId, date]);
+    const before = rows[0] ? Number(rows[0].value) : 0;
+    const delta = mode === "deposit" ? amount : -amount;
+    if (before + delta < -0.005) return { error: `You can't take out more than the balance on that date (${money(before, user.currency)}).` };
+    await pool.query(
+      `INSERT INTO entries (account_id, date, value, contribution, note) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (account_id, date) DO UPDATE SET value = $3, contribution = entries.contribution + $4, note = COALESCE($5, entries.note)`,
+      [accountId, date, Math.max(0, before + delta), delta, note],
+    );
+    revalidatePath("/", "layout");
+    return;
+  }
 
-  // One snapshot per asset per day: entering the same day again corrects it.
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Enter the balance on that date." };
   await pool.query(
     `INSERT INTO entries (account_id, date, value, note) VALUES ($1, $2, $3, $4)
      ON CONFLICT (account_id, date) DO UPDATE SET value = $3, note = $4`,
-    [accountId, date, value, note],
+    [accountId, date, amount, note],
   );
   revalidatePath("/", "layout");
 }

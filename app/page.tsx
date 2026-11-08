@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import ForecastChart from "@/components/ForecastChart";
-import UpdateValues, { type ValueRow } from "@/components/UpdateValues";
 import PieCard from "@/components/PieCard";
 import { listAccounts, listCategories, listEntries, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
@@ -11,7 +10,7 @@ import { forecast } from "@/lib/forecast";
 import { payments } from "@/lib/plan";
 import { accountEntries, holdings, slices } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
+import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
 export default async function Overview() {
   const user = await requireUser();
@@ -38,20 +37,6 @@ export default async function Overview() {
     );
   }
 
-  // One row per asset that can be given a new value: any cash or saving balance, and any investment with units.
-  const valueRows: ValueRow[] = accounts.flatMap((a) => {
-    const h = rows.find((x) => x.account.id === a.id);
-    if (isInvestment(a) && !h) return [];
-    return [{
-      id: a.id,
-      name: a.name,
-      color: a.categoryColor,
-      investment: isInvestment(a),
-      units: h?.quantity ?? null,
-      current: h ? (h.investment ? h.price : h.value) : null,
-    }];
-  });
-
   const totalValue = rows.reduce((s, h) => s + h.value, 0);
   // Profit and loss exist only for investments; cash and saving are just a balance.
   const invs = rows.filter((h) => h.investment);
@@ -60,6 +45,23 @@ export default async function Overview() {
   const invPl = invValue - invCost;
   const invPlPct = invCost > 0 ? invPl / invCost : null;
   const realized = invs.reduce((s, h) => s + h.realized, 0);
+
+  // The assets table, one group per category in the categories' own order, each with its subtotal.
+  const groups = categories
+    .map((category) => {
+      const members = rows.filter((h) => h.account.categoryId === category.id);
+      const inv = members.filter((h) => h.investment);
+      const cost = inv.reduce((s, h) => s + h.cost, 0);
+      return {
+        category,
+        rows: members,
+        value: members.reduce((s, h) => s + h.value, 0),
+        investment: inv.length > 0,
+        cost,
+        pl: inv.reduce((s, h) => s + h.value, 0) - cost,
+      };
+    })
+    .filter((g) => g.rows.length > 0);
 
   const paint = (list: ReturnType<typeof slices>, order: readonly { id: string }[]) =>
     list.map((s) => ({ ...s, color: colorFor(s.id, order) }));
@@ -79,7 +81,7 @@ export default async function Overview() {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div className="flex items-center justify-between gap-3">
         <Breadcrumb items={[{ label: "Overview" }]} />
-        <UpdateValues rows={valueRows} currency={cur} />
+        <Link href="/update" className="btn">Update values</Link>
       </div>
       <section className="rounded-[28px] bg-gradient-to-br from-[var(--hero-a)] via-[var(--hero-b)] to-[var(--hero-c)] p-6 text-white sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total value of all assets</p>
@@ -148,7 +150,6 @@ export default async function Overview() {
             <thead>
               <tr className="eyebrow border-y border-line text-left">
                 <th className="py-2 pl-4 sm:pl-6">Asset</th>
-                <th className="py-2">Category</th>
                 <th className="py-2">Type</th>
                 <th className="py-2">Liquidity</th>
                 <th className="py-2 text-right">Cost</th>
@@ -156,14 +157,33 @@ export default async function Overview() {
                 <th className="py-2 pr-4 text-right sm:pr-6">Profit / loss</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map((h) => (
+            {groups.map((g) => (
+              <tbody key={g.category.id} className="divide-y divide-line">
+                <tr className="bg-surface-2 font-bold">
+                  <td className="py-2.5 pl-4 sm:pl-6" colSpan={3}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="size-2.5 rounded-full" style={{ background: g.category.color }} />
+                      {g.category.name}
+                      <span className="text-xs font-normal text-ink-3">{g.rows.length} {g.rows.length === 1 ? "asset" : "assets"} · {totalValue > 0 ? `${((g.value / totalValue) * 100).toFixed(1)}%` : "—"} of total</span>
+                    </span>
+                  </td>
+                  <td className="num py-2.5 text-right">{g.investment ? money(g.cost, cur) : "—"}</td>
+                  <td className="num py-2.5 text-right">{money(g.value, cur)}</td>
+                  {g.investment ? (
+                    <td className={`num py-2.5 pr-4 text-right sm:pr-6 ${tone(g.pl)}`}>
+                      {pct(g.cost > 0 ? g.pl / g.cost : null)}
+                      <span className="block text-xs font-medium">{signedMoney(g.pl, cur)}</span>
+                    </td>
+                  ) : (
+                    <td className="py-2.5 pr-4 text-right text-ink-3 sm:pr-6">—</td>
+                  )}
+                </tr>
+              {g.rows.map((h) => (
                 <tr key={h.account.id}>
-                  <td className="py-3 pl-4 font-semibold sm:pl-6">
+                  <td className="py-3 pl-8 font-semibold sm:pl-10">
                     <Link href={`/accounts/${h.account.id}`}>{h.account.name}</Link>
                     <span className="block text-xs font-normal text-ink-3">Updated {day(h.lastDate)}</span>
                   </td>
-                  <td className="py-3"><span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ background: h.account.categoryColor }} />{h.account.categoryName}</span></td>
                   <td className="py-3">{labelOf(TYPES, h.account.type)}</td>
                   <td className="py-3">{labelOf(LIQUIDITY, h.account.liquidity)}</td>
                   <td className="num py-3 text-right">{h.investment ? money(h.cost, cur) : "—"}</td>
@@ -178,10 +198,11 @@ export default async function Overview() {
                   )}
                 </tr>
               ))}
-            </tbody>
+              </tbody>
+            ))}
             <tfoot>
               <tr className="border-t border-line font-bold">
-                <td className="py-3 pl-4 sm:pl-6" colSpan={4}>Total <span className="text-xs font-normal text-ink-3">(cost and profit: investments only)</span></td>
+                <td className="py-3 pl-4 sm:pl-6" colSpan={3}>Total <span className="text-xs font-normal text-ink-3">(cost and profit: investments only)</span></td>
                 <td className="num py-3 text-right">{invs.length > 0 ? money(invCost, cur) : "—"}</td>
                 <td className="num py-3 text-right">{money(totalValue, cur)}</td>
                 {invs.length > 0 ? (

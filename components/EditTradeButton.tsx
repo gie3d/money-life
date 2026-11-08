@@ -7,7 +7,7 @@ import TradeFields from "./TradeFields";
 import type { FormState } from "@/app/actions/auth";
 import type { Trade } from "@/lib/types";
 
-type Target = { id: number; name: string; archived: boolean };
+type Target = { id: number; name: string; archived: boolean; categoryId: number; category: string };
 const titleOf = (t: Trade) => (t.transfer ? "Edit transfer" : t.total ? "Edit total" : "Edit trade");
 
 /** A pencil that opens the trade in a dialog, filled in, to change any of it. A total or a transfer is edited as itself. */

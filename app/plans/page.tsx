@@ -4,7 +4,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import PlanForm from "@/components/PlanForm";
 import { listAccounts, listEntries, listPlanAssets, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { day, money, monthLabel, tone } from "@/lib/format";
-import { payments, schedule } from "@/lib/plan";
+import { finish, monthsText, payments, schedule } from "@/lib/plan";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 
@@ -35,7 +35,10 @@ export default async function PlansPage() {
             const ids = new Set(funding.get(plan.id) ?? []);
             const funds = held.filter((h) => ids.has(h.account.id)).reduce((s, h) => s + h.value, 0);
             const s = schedule(payments(mine), funds, plan.monthlySaving, today);
-            const next = payments(mine).find((p) => p.date >= today);
+            const all = payments(mine);
+            const next = all.find((p) => p.date >= today);
+            const end = finish(all, today);
+            const paidShare = s.total > 0 ? (s.total - s.remaining) / s.total : 0;
             return (
               <Link key={plan.id} href={`/plans/${plan.id}`} className="card block space-y-3 p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
@@ -46,6 +49,20 @@ export default async function PlansPage() {
                   <p className="text-sm text-ink-3">No costs yet. Open it to add some.</p>
                 ) : (
                   <>
+                    {end && (
+                      <div className="space-y-1.5">
+                        <p className="text-sm">
+                          {end.done ? (
+                            <span className="font-semibold text-go-text">Finished {day(end.date)}</span>
+                          ) : (
+                            <>Finishes <span className="font-semibold">{day(end.date)}</span><span className="text-ink-3"> · in {monthsText(end.monthsLeft)}</span></>
+                          )}
+                        </p>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${Math.round(paidShare * 100)}% paid`}>
+                          <div className="h-full rounded-full bg-brand" style={{ width: `${paidShare * 100}%` }} />
+                        </div>
+                      </div>
+                    )}
                     <p className="text-sm text-ink-3">
                       {s.remaining > 0 ? <>Still to pay <span className="num font-semibold text-ink">{money(s.remaining, cur)}</span>{next && <> · next {day(next.date)}</>}</> : "Everything is already paid."}
                     </p>

@@ -9,9 +9,10 @@ import PlanSettings from "@/components/PlanSettings";
 import Markdown from "@/components/Markdown";
 import NotesEditor from "@/components/NotesEditor";
 import { deletePlan, deletePlanItem, updatePlanNotes } from "@/app/actions/plans";
-import { getPlan, listAccounts, listEntries, listPlanAssets, listPlanItems, listPrices, listTrades } from "@/lib/data";
+import { getPlan, listAccounts, listCategories, listEntries, listPlanAssets, listPlanItems, listPrices, listTrades } from "@/lib/data";
+import { sortByCategory } from "@/lib/group";
 import { day, money, monthLabel, tone } from "@/lib/format";
-import { payments, schedule } from "@/lib/plan";
+import { finish, monthsText, payments, schedule } from "@/lib/plan";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { FREQUENCIES, labelOf } from "@/lib/types";
@@ -29,9 +30,9 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
   if (!plan) notFound();
 
   const cur = user.currency;
-  const [items, funding, accounts, entries, trades, prices] = await Promise.all([
+  const [items, funding, accounts, entries, trades, prices, categories] = await Promise.all([
     listPlanItems(user.id, plan.id), listPlanAssets(user.id),
-    listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id),
+    listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id), listCategories(user.id),
   ]);
   const held = holdings(accounts, entries, trades, prices);
   const chosen = new Set(funding.get(plan.id) ?? []);
@@ -39,11 +40,13 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
 
   const today = new Date().toISOString().slice(0, 10);
   const all = payments(items);
+  const end = finish(all, today);
   const s = schedule(all, funds, plan.monthlySaving, today);
-  const fundingAssets = accounts.map((a) => ({
+  const fundingAssets = sortByCategory(accounts, (a) => a.categoryId, categories).map((a) => ({
     id: a.id,
     name: a.name,
     color: a.categoryColor,
+    categoryId: a.categoryId,
     category: a.categoryName,
     value: held.find((h) => h.account.id === a.id)?.value ?? 0,
     checked: chosen.has(a.id),
@@ -69,9 +72,10 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
         </div>
       )}
 
-      <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4 sm:p-6">
+      <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 sm:p-6 lg:grid-cols-5">
         <Figure label="Total cost" value={money(s.total, cur)} />
         <Figure label="Still to pay" value={money(s.remaining, cur)} />
+        {end && <Figure label={end.done ? "Finished" : "Finishes"} value={day(end.date)} hint={end.done ? undefined : `in ${monthsText(end.monthsLeft)}`} />}
         <Figure label="Funds today" value={money(funds, cur)} hint={plan.monthlySaving > 0 ? `+ ${money(plan.monthlySaving, cur)} a month` : undefined} />
         {s.low ? (
           <Figure
