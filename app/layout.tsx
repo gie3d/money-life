@@ -4,6 +4,8 @@ import Link from "next/link";
 import Script from "next/script";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import UpdateBanner from "@/components/UpdateBanner";
+import { appVersion } from "@/lib/version";
 import { getUser } from "@/lib/session";
 import pkg from "../package.json";
 
@@ -50,6 +52,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <span aria-hidden>·</span>
           <Link href="/releases" className="font-semibold hover:underline">Release notes</Link>
         </footer>
+        <UpdateBanner version={appVersion()} />
       </body>
     </html>
   );

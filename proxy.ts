@@ -7,7 +7,7 @@ export function proxy(request: NextRequest) {
   const signedIn = request.cookies.has("ml_session");
   const { pathname } = request.nextUrl;
   // Signed-in visitors on /login are bounced by the page itself, which can tell a stale cookie from a live one.
-  const isAuthPage = pathname === "/login" || pathname === "/signup" || pathname === "/releases";
+  const isAuthPage = pathname === "/login" || pathname === "/signup" || pathname === "/releases" || pathname === "/api/version";
 
   if (!signedIn && !isAuthPage) return NextResponse.redirect(new URL("/login", request.url));
   return NextResponse.next();

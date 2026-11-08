@@ -34,6 +34,9 @@ in `package.json` to match.
 ### App
 - The footer shows the version and a **Release notes** link to this page, with the latest changes and a way to open
   earlier versions.
+- A **reload button** in the top bar, before the theme switch, for using the app as an installed web app.
+- When a newer version has been deployed, a bar at the bottom asks you to **reload**. The open app checks every minute
+  and whenever it comes back to the foreground.
 - Docker publishes the web app on port **3333** and Postgres on **5333**, so it can run beside other projects.
 
 ## [0.3.0] - 2026-11-08
