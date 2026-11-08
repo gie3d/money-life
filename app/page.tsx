@@ -1,12 +1,14 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import CollapsibleRows from "@/components/CollapsibleRows";
+import TrendCell from "@/components/TrendCell";
 import ForecastChart from "@/components/ForecastChart";
 import AllocationBars, { type AllocationRow } from "@/components/AllocationBars";
 import { listAccounts, listCategories, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valuesOn } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
+import { sixMonthTrend } from "@/lib/trend";
 import { compactMoney, day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
 import { extendTo, netWorthSeries } from "@/lib/performance";
@@ -77,6 +79,9 @@ export default async function Overview() {
     .filter((r) => r.value !== 0);
 
   const today = new Date().toISOString().slice(0, 10);
+  // The small 6-month chart of an asset, a category or everything, as on the Assets page.
+  const trendOf = (members: typeof rows) => sixMonthTrend(members.map((h) => accountEntries(h.account, entries, trades, prices)), today);
+
 
   // Goals, three years out: where each plan should be by then (or at its own date, if sooner), where carrying on
   // from today leads by then, and how each stands against its plan today.
@@ -249,7 +254,7 @@ export default async function Overview() {
           <p className="text-xs text-ink-3">Click a category to see its assets.</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-sm">
+          <table className="w-full min-w-[54rem] text-sm">
             <thead>
               <tr className="eyebrow border-y border-line text-left">
                 <th className="py-2 pl-4 sm:pl-6">Asset</th>
@@ -257,6 +262,7 @@ export default async function Overview() {
                 <th className="py-2">Liquidity</th>
                 <th className="py-2 text-right">Cost</th>
                 <th className="py-2 text-right">Value</th>
+                <th className="py-2 text-right">6 months</th>
                 <th className="py-2 pr-4 text-right sm:pr-6">Profit / loss</th>
               </tr>
             </thead>
@@ -275,6 +281,7 @@ export default async function Overview() {
                 cells={<>
                   <td className="num py-2.5 text-right">{g.investment ? money(g.cost, cur) : "—"}</td>
                   <td className="num py-2.5 text-right">{money(g.value, cur)}</td>
+                  <td className="py-2 text-right font-normal"><TrendCell trend={trendOf(g.rows)} name={g.category.name} always /></td>
                   {g.investment ? (
                     <td className={`num py-2.5 pr-4 text-right sm:pr-6 ${tone(g.pl)}`}>
                       {pct(g.cost > 0 ? g.pl / g.cost : null)}
@@ -295,6 +302,7 @@ export default async function Overview() {
                   <td className="py-3">{labelOf(LIQUIDITY, h.account.liquidity)}</td>
                   <td className="num py-3 text-right">{h.investment ? money(h.cost, cur) : "—"}</td>
                   <td className="num py-3 text-right font-semibold">{money(h.value, cur)}</td>
+                  <td className="py-2 text-right"><TrendCell trend={trendOf([h])} name={h.account.name} always /></td>
                   {h.pl === null ? (
                     <td className="py-3 pr-4 text-right text-ink-3 sm:pr-6">—</td>
                   ) : (
@@ -312,6 +320,7 @@ export default async function Overview() {
                 <td className="py-3 pl-4 sm:pl-6" colSpan={3}>Total <span className="text-xs font-normal text-ink-3">(cost and profit: investments only)</span></td>
                 <td className="num py-3 text-right">{invs.length > 0 ? money(invCost, cur) : "—"}</td>
                 <td className="num py-3 text-right">{money(totalValue, cur)}</td>
+                <td className="py-2 text-right font-normal"><TrendCell trend={trendOf(rows)} name="All assets" always /></td>
                 {invs.length > 0 ? (
                   <td className={`num py-3 pr-4 text-right sm:pr-6 ${tone(invPl)}`}>
                     {pct(invPlPct)}

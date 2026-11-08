@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import AccountForm from "@/components/AccountForm";
-import Sparkline from "@/components/Sparkline";
+import TrendCell from "@/components/TrendCell";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
-import { day, money, pct } from "@/lib/format";
-import { extendTo, netWorthSeries, periodStart, totalPerformance, type Point } from "@/lib/performance";
+import { day, money } from "@/lib/format";
+import { sixMonthTrend } from "@/lib/trend";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
@@ -21,20 +21,9 @@ export default async function AccountsPage() {
   const cur = user.currency;
   const valueOf = (id: number) => held.find((h) => h.account.id === id)?.value ?? 0;
 
-  // Each asset's last 6 months for its small chart, coloured by how it performed (money in or out set aside).
+  // Each asset's (and category's) last 6 months for its small chart, coloured by how it performed.
   const today = new Date().toISOString().slice(0, 10);
-  const from = periodStart("6M", today)!;
-  // The same for a category, from its assets combined (those counted in its sum).
-  const trendOf = (members: (typeof accounts)[number][]) => {
-    const lists = members.map((a) => accountEntries(a, entries, trades, prices)).filter((l) => l.length > 0);
-    if (lists.length === 0) return null;
-    const first = lists.map((l) => l[0].date).sort()[0];
-    const start = first > from ? null : from;
-    const points = extendTo(netWorthSeries(lists, start, today), today);
-    const perf = totalPerformance(lists, start ?? first, today);
-    const tone = Math.abs(perf.gain) < 0.005 ? ("flat" as const) : perf.gain > 0 ? ("up" as const) : ("down" as const);
-    return { points, tone, returnPct: perf.returnPct, since: start ?? first };
-  };
+  const trendOf = (members: (typeof accounts)[number][]) => sixMonthTrend(members.map((a) => accountEntries(a, entries, trades, prices)), today);
 
   // One group per category with assets, in the categories' own order; archived assets are listed but not summed.
   const active = accounts.filter((a) => !a.archived);
@@ -68,7 +57,7 @@ export default async function AccountsPage() {
                   <h2 className="truncate text-lg">{category.name}</h2>
                   <p className="text-xs text-ink-3">{labelOf(TYPES, category.type)} · {members.length} {members.length === 1 ? "asset" : "assets"}</p>
                 </div>
-                {headTrend && <Trend trend={headTrend} name={category.name} />}
+                {headTrend && <TrendCell trend={headTrend} name={category.name} />}
                 <div className="w-36 shrink-0 text-right sm:w-44">
                   <p className="num text-lg font-bold">{money(sum, cur)}</p>
                   {total > 0 && <p className="num text-xs text-ink-3">{((sum / total) * 100).toFixed(1)}% of total</p>}
@@ -83,7 +72,7 @@ export default async function AccountsPage() {
                       <p className="truncate font-semibold">{a.name}{a.archived && <span className="ml-2 text-xs font-medium text-ink-3">archived</span>}</p>
                       <p className="text-xs text-ink-3">{labelOf(LIQUIDITY, a.liquidity)}</p>
                     </div>
-                    {trend && <Trend trend={trend} name={a.name} />}
+                    {trend && <TrendCell trend={trend} name={a.name} />}
                     <div className="w-36 shrink-0 text-right sm:w-44">
                       <p className="num font-semibold">{latest ? money(latest.value, cur) : "Nothing recorded yet"}</p>
                       {latest && <p className="text-xs text-ink-3">{day(latest.lastDate)}</p>}
@@ -100,15 +89,3 @@ export default async function AccountsPage() {
   );
 }
 
-/** The small chart and the return beside it, for an asset or a category. Hidden on narrow screens. */
-function Trend({ trend, name }: { trend: { points: Point[]; tone: "up" | "down" | "flat"; returnPct: number | null; since: string }; name: string }) {
-  const word = trend.tone === "up" ? "gain" : trend.tone === "down" ? "loss" : "no change";
-  return (
-    <div className="hidden shrink-0 items-center gap-2 sm:flex" title={`Since ${day(trend.since)}`}>
-      <Sparkline points={trend.points} tone={trend.tone} label={`${name}, since ${day(trend.since)}: ${word}${trend.returnPct !== null ? ` of ${pct(trend.returnPct)}` : ""}`} />
-      <span className={`num w-14 text-right text-xs font-semibold ${trend.tone === "up" ? "text-go-text" : trend.tone === "down" ? "text-miss-text" : "text-ink-3"}`}>
-        {pct(trend.returnPct)}
-      </span>
-    </div>
-  );
-}

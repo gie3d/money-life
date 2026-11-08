@@ -56,8 +56,10 @@ export default function Nav({ userName }: { userName: string | null }) {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-        <Link href="/" className="text-[1.05rem] font-extrabold tracking-tight">
-          Money<span className="text-brand">Life</span>
+        <Link href="/" className="flex shrink-0 items-center gap-2 text-[1.05rem] font-extrabold tracking-tight">
+          {/* The mark: a sprout, money that grows over a life. */}
+          <span className="grid size-8 place-items-center rounded-xl bg-brand-soft text-[1.15rem] leading-none" aria-hidden>🌱</span>
+          <span>Money<span className="text-brand">Life</span></span>
         </Link>
         {userName && (
           <nav className="ml-2 flex min-w-0 gap-1 overflow-x-auto">
