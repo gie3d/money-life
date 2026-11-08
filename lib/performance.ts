@@ -11,6 +11,13 @@ export const PERIODS: { id: Period; label: string }[] = [
   { id: "ALL", label: "All" },
 ];
 
+/** Every calendar year from the first record to today, newest first, for picking one year to chart. */
+export function chartYears(firstDate: string, today: string): number[] {
+  const out: number[] = [];
+  for (let y = Number(today.slice(0, 4)); y >= Number(firstDate.slice(0, 4)); y--) out.push(y);
+  return out;
+}
+
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10);

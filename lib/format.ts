@@ -12,6 +12,16 @@ export const signedMoney = (n: number, currency: string) =>
 export const pct = (n: number | null, digits = 1) =>
   n === null ? "—" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n * 100).toFixed(digits)}%`;
 
+/** A date for a chart axis: "Mar 5" within about a year, "Mar 2024" over a longer span. */
+export const axisDate = (iso: string, long: boolean) =>
+  long
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })
+    : day(iso, false);
+
+/** True when a series runs over more than about a year, so its axis needs the year. */
+export const spansYears = (points: { date: string }[]) =>
+  points.length > 1 && Date.parse(points[points.length - 1].date) - Date.parse(points[0].date) > 330 * 86_400_000;
+
 export const day = (iso: string, withYear = true) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
     day: "numeric",

@@ -1,7 +1,7 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { compactMoney, day, signedMoney } from "@/lib/format";
+import { axisDate, compactMoney, day, spansYears, signedMoney } from "@/lib/format";
 import type { Point } from "@/lib/performance";
 import FullscreenButton from "./FullscreenButton";
 import TradingChart from "./TradingChart";
@@ -13,6 +13,7 @@ export default function ProfitChart({ data, currency, title }: { data: Point[]; 
   if (data.length < 2) {
     return <p className="py-16 text-center text-sm text-ink-3">Add a second trade or price to see profit over time.</p>;
   }
+  const long = spansYears(data);
   const rows = data.map((p) => ({ date: p.date, profit: p.value - p.cost }));
   const hi = Math.max(...rows.map((r) => r.profit));
   const lo = Math.min(...rows.map((r) => r.profit));
@@ -36,7 +37,7 @@ export default function ProfitChart({ data, currency, title }: { data: Point[]; 
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--line)" vertical={false} />
-            <XAxis dataKey="date" tickFormatter={(d: string) => day(d, false)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
+            <XAxis dataKey="date" tickFormatter={(d: string) => axisDate(d, long)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
             <YAxis width={52} tickFormatter={(n: number) => compact(n, currency)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} domain={[Math.min(lo, 0), Math.max(hi, 0)]} />
             <ReferenceLine y={0} stroke="var(--ink-3)" />
             <Tooltip

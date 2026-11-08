@@ -41,10 +41,17 @@ const noSubscribe = () => () => {};
  * A calendar popover that submits an ISO date under `name`. It starts on today in the
  * visitor's own time zone, which the server can't know, so the first render is empty.
  */
-export default function DatePicker({ name, label, defaultValue }: { name: string; label: string; defaultValue?: string }) {
+export default function DatePicker({ name, label, defaultValue, onChange }: {
+  name: string;
+  label: string;
+  defaultValue?: string;
+  /** Called with the date shown, including today once it is known. */
+  onChange?: (date: string) => void;
+}) {
   const today = useSyncExternalStore(noSubscribe, localToday, () => "");
   const [picked, setPicked] = useState<string | null>(defaultValue ?? null);
   const value = picked ?? today;
+  useEffect(() => { if (value) onChange?.(value); }, [value, onChange]);
 
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(""); // the day the keyboard is on

@@ -1,6 +1,7 @@
 import "server-only";
 import { pool } from "./db";
-import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Trade } from "./types";
+import { applyTotals } from "./investment";
+import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -69,7 +70,30 @@ const toTrade = (r: Record<string, unknown>): Trade => ({
   note: (r.note as string | null) ?? null,
 });
 
+/**
+ * Trades of the given accounts, oldest first, including the ones worked out from "Total" entries.
+ * Everything that values a holding reads this, so totals count everywhere.
+ */
 export async function listTrades(userId: number, accountId?: number): Promise<Trade[]> {
+  const [trades, totals] = await Promise.all([listEnteredTrades(userId, accountId), listTotals(userId, accountId)]);
+  return applyTotals(trades, totals);
+}
+
+export async function listTotals(userId: number, accountId?: number): Promise<Total[]> {
+  const { rows } = await pool.query(
+    `SELECT s.id, s.account_id, s.date::text AS date, s.units, s.cost, s.price, s.note
+     FROM totals s JOIN accounts a ON a.id = s.account_id
+     WHERE a.user_id = $1 ${accountId ? "AND a.id = $2" : ""} ORDER BY s.date`,
+    accountId ? [userId, accountId] : [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, units: Number(r.units),
+    cost: Number(r.cost), price: Number(r.price), note: (r.note as string | null) ?? null,
+  }));
+}
+
+/** Only the buys and sales entered as such, without the ones from totals. */
+export async function listEnteredTrades(userId: number, accountId?: number): Promise<Trade[]> {
   const { rows } = await pool.query(
     `SELECT t.id, t.account_id, t.date::text AS date, t.side, t.quantity, t.price, t.fee, t.note
      FROM transactions t JOIN accounts a ON a.id = t.account_id

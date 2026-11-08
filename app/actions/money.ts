@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
-import { getAccount, listAccounts, listEntries, listPrices, listTrades } from "@/lib/data";
-import { replay } from "@/lib/investment";
+import { getAccount, listAccounts, listEnteredTrades, listEntries, listPrices, listTotals, listTrades } from "@/lib/data";
+import { applyTotals, replay, TOTAL_ID_BASE } from "@/lib/investment";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-import { HEX, isInvestment, LIQUIDITY, TYPES, type Trade } from "@/lib/types";
+import { HEX, isInvestment, LIQUIDITY, TYPES, type Total, type Trade } from "@/lib/types";
 import type { FormState } from "./auth";
 
 const num = (v: FormDataEntryValue | null) => {
@@ -140,14 +140,50 @@ function readTrade(form: FormData): TradeInput | { error: string } {
   return { side, date, quantity, price, fee, note };
 }
 
+type TotalInput = Omit<Total, "id" | "accountId">;
+
+/** Reads and checks the fields of a "Total" entry: units held, what they cost in all, and the price of one unit. */
+function readTotal(form: FormData): TotalInput | { error: string } {
+  const date = String(form.get("date") ?? "");
+  const units = num(form.get("units"));
+  const cost = num(form.get("cost"));
+  const price = num(form.get("price"));
+  const note = String(form.get("note") ?? "").trim() || null;
+  if (!isDate(date)) return { error: "Pick a date." };
+  if (!(units >= 0)) return { error: "Enter how many units you hold, zero or more." };
+  if (!(cost >= 0)) return { error: "Enter what the units you hold cost in all, zero or more." };
+  if (!(price >= 0)) return { error: "Enter the current price of one unit." };
+  return { date, units, cost, price, note };
+}
+
+/** True if the entered trades and totals, together, never sell more units than are held. */
+const consistent = (trades: Trade[], totals: Total[]) => replay(applyTotals(trades, totals)).ok;
+const TOO_MUCH = "That would leave a later sale selling more units than you held at its date.";
+
 export async function addTrade(accountId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
+  const [trades, totals] = await Promise.all([listEnteredTrades(user.id, accountId), listTotals(user.id, accountId)]);
+
+  if (form.get("side") === "total") {
+    const s = readTotal(form);
+    if ("error" in s) return s;
+    // One total per day: entering the same day again replaces it.
+    if (!consistent(trades, [...totals.filter((x) => x.date !== s.date), { ...s, id: 0, accountId }])) return { error: TOO_MUCH };
+    await pool.query(
+      `INSERT INTO totals (account_id, date, units, cost, price, note) VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (account_id, date) DO UPDATE SET units = $3, cost = $4, price = $5, note = $6`,
+      [accountId, s.date, s.units, s.cost, s.price, s.note],
+    );
+    revalidatePath("/", "layout");
+    return;
+  }
+
   const t = readTrade(form);
   if ("error" in t) return t;
-
   // A sale cannot take out more than was held on that day, or the position would go negative.
-  if (!replay([...(await listTrades(user.id, accountId)), { ...t, id: Number.MAX_SAFE_INTEGER, accountId }]).ok) {
+  // The new trade sorts before any total of the same day, as a saved one would.
+  if (!consistent([...trades, { ...t, id: TOTAL_ID_BASE - 1, accountId }], totals)) {
     return { error: "You can't sell more units than you held at that date." };
   }
   await pool.query(
@@ -159,14 +195,15 @@ export async function addTrade(accountId: number, _: FormState, form: FormData):
 
 export async function updateTrade(accountId: number, tradeId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
-  const all = await listTrades(user.id, accountId);
+  const [all, totals] = await Promise.all([listEnteredTrades(user.id, accountId), listTotals(user.id, accountId)]);
   if (!all.some((x) => x.id === tradeId)) return { error: "That trade no longer exists." };
   const t = readTrade(form);
   if ("error" in t) return t;
 
   // The edited trade may move or shrink a purchase that later sales rely on, or grow a sale too far.
-  const next = all.map((x) => (x.id === tradeId ? { ...x, ...t } : x));
-  if (!replay(next).ok) return { error: "That would leave a sale selling more units than you held at that date." };
+  if (!consistent(all.map((x) => (x.id === tradeId ? { ...x, ...t } : x)), totals)) {
+    return { error: "That would leave a sale selling more units than you held at that date." };
+  }
 
   await pool.query(
     `UPDATE transactions t SET date = $3, side = $4, quantity = $5, price = $6, fee = $7, note = $8
@@ -178,13 +215,38 @@ export async function updateTrade(accountId: number, tradeId: number, _: FormSta
 
 export async function deleteTrade(accountId: number, tradeId: number, _: FormState): Promise<FormState> {
   const user = await requireUser();
-  const rest = (await listTrades(user.id, accountId)).filter((t) => t.id !== tradeId);
+  const [all, totals] = await Promise.all([listEnteredTrades(user.id, accountId), listTotals(user.id, accountId)]);
   // Removing a buy can leave a later sale with nothing to sell.
-  if (!replay(rest).ok) return { error: "Delete the later sales first: they depend on this purchase." };
+  if (!consistent(all.filter((t) => t.id !== tradeId), totals)) return { error: "Delete the later sales first: they depend on this purchase." };
   await pool.query(
     "DELETE FROM transactions t USING accounts a WHERE t.id = $1 AND a.id = t.account_id AND a.user_id = $2",
     [tradeId, user.id],
   );
+  revalidatePath("/", "layout");
+}
+
+export async function updateTotal(accountId: number, totalId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const [trades, totals] = await Promise.all([listEnteredTrades(user.id, accountId), listTotals(user.id, accountId)]);
+  if (!totals.some((x) => x.id === totalId)) return { error: "That total no longer exists." };
+  const s = readTotal(form);
+  if ("error" in s) return s;
+  if (totals.some((x) => x.id !== totalId && x.date === s.date)) return { error: "There is already a total on that date. Edit that one instead." };
+  if (!consistent(trades, totals.map((x) => (x.id === totalId ? { ...x, ...s } : x)))) return { error: TOO_MUCH };
+
+  await pool.query(
+    `UPDATE totals s SET date = $3, units = $4, cost = $5, price = $6, note = $7
+     FROM accounts a WHERE s.id = $1 AND a.id = s.account_id AND a.user_id = $2`,
+    [totalId, user.id, s.date, s.units, s.cost, s.price, s.note],
+  );
+  revalidatePath("/", "layout");
+}
+
+export async function deleteTotal(accountId: number, totalId: number, _: FormState): Promise<FormState> {
+  const user = await requireUser();
+  const [trades, totals] = await Promise.all([listEnteredTrades(user.id, accountId), listTotals(user.id, accountId)]);
+  if (!consistent(trades, totals.filter((x) => x.id !== totalId))) return { error: TOO_MUCH };
+  await pool.query("DELETE FROM totals s USING accounts a WHERE s.id = $1 AND a.id = s.account_id AND a.user_id = $2", [totalId, user.id]);
   revalidatePath("/", "layout");
 }
 

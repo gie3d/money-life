@@ -1,11 +1,18 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
+import { replay } from "@/lib/investment";
+import type { Trade } from "@/lib/types";
 import { addTrade } from "@/app/actions/money";
 import TradeFields from "./TradeFields";
 import type { FormState } from "@/app/actions/auth";
 
-export default function TradeForm({ accountId, currency }: { accountId: number; currency: string }) {
+export default function TradeForm({ accountId, currency, trades }: { accountId: number; currency: string; trades: Trade[] }) {
+  // A new total replaces one already on its day, so that one is left out of what was held.
+  const heldOn = useCallback(
+    (date: string) => replay(trades.filter((t) => t.date < date || (t.date === date && !t.total))),
+    [trades],
+  );
   // The fields hold their own state, so a saved trade is cleared by starting them afresh.
   const [fresh, setFresh] = useState(0);
   const [state, action, pending] = useActionState<FormState, FormData>(async (prev, form) => {
@@ -17,7 +24,7 @@ export default function TradeForm({ accountId, currency }: { accountId: number; 
   return (
     <form action={action} className="card space-y-4 p-5 sm:p-6">
       <h2 className="text-lg">Record a trade</h2>
-      <TradeFields key={fresh} currency={currency} />
+      <TradeFields key={fresh} currency={currency} heldOn={heldOn} />
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save trade"}</button>
     </form>

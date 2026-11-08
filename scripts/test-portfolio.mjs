@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-portfolio.mjs
 import assert from "node:assert/strict";
-import { investmentEntries, latestPrice, priceHistory, replay } from "../lib/investment.ts";
+import { applyTotals, investmentEntries, latestPrice, priceHistory, replay, tradeCash } from "../lib/investment.ts";
 import { holdings, slices } from "../lib/portfolio.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`);
@@ -50,3 +50,44 @@ assert.equal(rows[1].pl, null); assert.equal(rows[1].plPct, null); near(rows[1].
 const order = [{ id: "cash", label: "Cash" }, { id: "stocks", label: "Stocks" }, { id: "gold", label: "Gold" }];
 assert.deepEqual(slices(rows, (h) => h.account.categoryId, (h) => h.value, order).map((s) => [s.id, s.value]), [["cash", 300], ["stocks", 1500]]);
 console.log("ok");
+
+// Totals: each is the holding (units and their cost) at the end of its day; the trade it stands for is worked out from what came before.
+{
+  const tot = (id, date, units, cost, price = 1_000_000) => ({ id, accountId: 9, date, units, cost, price, note: null });
+  const at = (ts, date) => replay(ts.filter((t) => t.date <= date));
+  const sides = (ts) => ts.map((t) => `${t.side} ${Math.round(t.quantity * 1e8) / 1e8}`);
+
+  // Entered out of order: 1 Jan 0.25 BTC, 1 Mar 0.50, then 1 Feb 0.70. Every date keeps its units and cost.
+  let ts = applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000), tot(3, "2025-02-01", 0.7, 700_000)]);
+  assert.deepEqual(sides(ts), ["buy 0.25", "buy 0.45", "sell 0.2"]);
+  near(at(ts, "2025-01-01").quantity, 0.25); near(at(ts, "2025-02-01").quantity, 0.7); near(at(ts, "2025-03-01").quantity, 0.5);
+  near(at(ts, "2025-01-01").cost, 250_000); near(at(ts, "2025-02-01").cost, 700_000); near(at(ts, "2025-03-01").cost, 480_000);
+  assert.equal(replay(ts).ok, true);
+  assert.equal(ts[2].total.id, 2);
+  // The buy paid in the rise in cost; the sale got 0.2 at the price and took 220,000 off the cost.
+  near(tradeCash(ts[1]), 450_000); near(tradeCash(ts[2]), 200_000); near(at(ts, "2025-03-01").realized, 200_000 - 220_000);
+
+  // Deleting the February total puts March back to buying 0.25 for 230,000.
+  ts = applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000)]);
+  assert.deepEqual(sides(ts), ["buy 0.25", "buy 0.25"]); near(tradeCash(ts[1]), 230_000);
+
+  // Entered trades count, including those on the same day as a total; a later total absorbs an earlier buy.
+  ts = applyTotals([tr(9, "2025-01-15", "buy", 0.1, 1_000_000), tr(9, "2025-03-01", "buy", 0.05, 1_000_000)],
+    [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 500_000)]);
+  near(at(ts, "2025-01-20").quantity, 0.35); near(at(ts, "2025-01-20").cost, 350_000);
+  near(at(ts, "2025-03-01").quantity, 0.5); near(at(ts, "2025-03-01").cost, 500_000);
+  assert.deepEqual(sides(ts.filter((t) => t.total)), ["buy 0.25", "buy 0.1"]);
+
+  // A total that lowers the holding below a later sale is flagged, as an oversell would be.
+  ts = applyTotals([tr(9, "2025-01-01", "buy", 1, 10), tr(9, "2025-03-01", "sell", 0.8, 10)], [tot(1, "2025-02-01", 0.5, 5, 10)]);
+  assert.equal(replay(ts).ok, false);
+
+  // No change in units still records the price, and can still correct the cost.
+  ts = applyTotals([tr(9, "2025-01-01", "buy", 2, 10)], [tot(1, "2025-02-01", 2, 22, 15)]);
+  near(ts[1].quantity, 0); near(latestPrice(ts, []).price, 15); near(replay(ts).cost, 22); near(tradeCash(ts[1]), 2);
+
+  // Values over time follow the totals: 0.7 BTC at 1.2m on 1 Feb.
+  const e = investmentEntries(9, applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(3, "2025-02-01", 0.7, 700_000, 1_200_000)]), []);
+  near(e[1].value, 840_000); near(e[1].cost, 700_000); near(e[1].contribution, 450_000);
+}
+console.log("totals ok");

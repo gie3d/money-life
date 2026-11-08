@@ -6,7 +6,7 @@ import PieCard from "@/components/PieCard";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
-import { extendTo, netWorthSeries, periodStart, PERIODS, totalPerformance, type Period } from "@/lib/performance";
+import { accountPerformance, chartYears, extendTo, netWorthSeries, periodStart, PERIODS, totalPerformance, type Period } from "@/lib/performance";
 import { accountEntries, holdings, slices } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
@@ -14,7 +14,7 @@ import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 export default async function Overview({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
   const sp = await searchParams;
-  const period = (PERIODS.find((p) => p.id === sp.period)?.id ?? "3M") as Period;
+  const requested = (PERIODS.find((p) => p.id === sp.period)?.id ?? "3M") as Period;
   const cur = user.currency;
 
   const [accounts, entries, categories, trades, prices] = await Promise.all([
@@ -70,12 +70,22 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
   const invLists = lists.filter((_, i) => rows[i].investment);
   const today = new Date().toISOString().slice(0, 10);
   const firstDate = lists.flat().map((e) => e.date).sort()[0];
-  const from = periodStart(period, today);
+  // A range ending today, or one calendar year (to today for the current one).
+  const years = chartYears(firstDate, today);
+  const year = years.find((y) => String(y) === sp.year);
+  const period = year ? null : requested;
+  const from = year ? `${year}-01-01` : periodStart(requested, today);
+  const end = year && `${year}-12-31` < today ? `${year}-12-31` : today;
   // Never reach back past the first record: a "1Y" view of a 2-month-old tracker is 2 months.
   const start = from && from > firstDate ? from : firstDate;
-  const perf = totalPerformance(invLists, start, today);
-  const series = extendTo(netWorthSeries(lists, start, today), today);
-  const invSeries = extendTo(netWorthSeries(invLists, start, today), today);
+  const perf = totalPerformance(invLists, start, end);
+  const series = extendTo(netWorthSeries(lists, start, end), end);
+  const invSeries = extendTo(netWorthSeries(invLists, start, end), end);
+  // Each investment over the same window, leaving out any not held at all during it.
+  const perAsset = rows
+    .map((h, i) => ({ h, p: h.investment ? accountPerformance(lists[i], start, end) : null }))
+    .filter((x): x is { h: typeof x.h; p: NonNullable<typeof x.p> } => x.p !== null && (x.p.start !== 0 || x.p.end !== 0 || x.p.contributions !== 0))
+    .sort((a, b) => b.p.gain - a.p.gain);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -163,30 +173,85 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
         </div>
       </section>
 
-      <nav className="flex gap-1.5 overflow-x-auto" aria-label="Period">
+      <nav className="flex items-center gap-1.5 overflow-x-auto" aria-label="Period">
         {PERIODS.map((p) => (
-          <Link key={p.id} href={`/?period=${p.id}`} aria-current={p.id === period ? "page" : undefined}
-            className={`rounded-full px-4 py-1.5 text-sm font-semibold ${p.id === period ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
+          <Link key={p.id} href={`/?period=${p.id}`} scroll={false} aria-current={p.id === period ? "page" : undefined}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${p.id === period ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
             {p.label}
+          </Link>
+        ))}
+        <span className="mx-1.5 h-5 w-px shrink-0 bg-line" aria-hidden />
+        {years.map((y) => (
+          <Link key={y} href={`/?year=${y}`} scroll={false} aria-current={y === year ? "page" : undefined}
+            className={`num shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${y === year ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
+            {y}
           </Link>
         ))}
       </nav>
 
       <section className="card p-4 sm:p-6">
-        <h2 className="mb-3 text-lg">Total value since {day(start)}</h2>
+        <h2 className="mb-3 text-lg">{year ? `Total value in ${year}` : `Total value since ${day(start)}`}</h2>
         <NetWorthChart data={series} currency={cur} title="Total value" />
       </section>
 
       {invs.length > 0 && (
         <section className="card p-4 sm:p-6">
           <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <h2 className="mr-auto text-lg">Investment performance</h2>
+            <h2 className="mr-auto text-lg">{year ? `Investment performance in ${year}` : "Investment performance"}</h2>
             <Stat label="Paid in" value={signedMoney(perf.contributions, cur)} />
             <Stat label="Gain" value={signedMoney(perf.gain, cur)} cls={tone(perf.gain)} />
             <Stat label="Return" value={pct(perf.returnPct)} cls={tone(perf.returnPct ?? 0)} />
           </div>
           <NetWorthChart data={invSeries} currency={cur} title="Investment performance" showCost />
           <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you still hold cost, fees included; the gap above it is profit. Return is time-weighted, so it differs from the profit on cost above.</p>
+        </section>
+      )}
+
+      {perAsset.length > 0 && (
+        <section className="card overflow-hidden">
+          <h2 className="p-4 text-lg sm:px-6">{year ? `Performance by asset in ${year}` : `Performance by asset since ${day(start)}`}</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-sm">
+              <thead>
+                <tr className="eyebrow border-y border-line text-left">
+                  <th className="py-2 pl-4 sm:pl-6">Asset</th>
+                  <th className="py-2 text-right">Value at start</th>
+                  <th className="py-2 text-right">Paid in</th>
+                  <th className="py-2 text-right">Value at end</th>
+                  <th className="py-2 text-right">Gain</th>
+                  <th className="py-2 pr-4 text-right sm:pr-6">Return</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {perAsset.map(({ h, p }) => (
+                  <tr key={h.account.id}>
+                    <td className="py-3 pl-4 font-semibold sm:pl-6">
+                      <Link href={`/accounts/${h.account.id}${year ? `?year=${year}` : ""}`}>{h.account.name}</Link>
+                      <span className="block text-xs font-normal text-ink-3">{h.account.categoryName}</span>
+                    </td>
+                    <td className="num py-3 text-right">{money(p.start, cur)}</td>
+                    <td className="num py-3 text-right">{signedMoney(p.contributions, cur)}</td>
+                    <td className="num py-3 text-right font-semibold">{money(p.end, cur)}</td>
+                    <td className={`num py-3 text-right font-semibold ${tone(p.gain)}`}>{signedMoney(p.gain, cur)}</td>
+                    <td className={`num py-3 pr-4 text-right font-semibold sm:pr-6 ${tone(p.returnPct ?? 0)}`}>{pct(p.returnPct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line font-bold">
+                  <td className="py-3 pl-4 sm:pl-6">All investments</td>
+                  <td className="num py-3 text-right">{money(perf.start, cur)}</td>
+                  <td className="num py-3 text-right">{signedMoney(perf.contributions, cur)}</td>
+                  <td className="num py-3 text-right">{money(perf.end, cur)}</td>
+                  <td className={`num py-3 text-right ${tone(perf.gain)}`}>{signedMoney(perf.gain, cur)}</td>
+                  <td className={`num py-3 pr-4 text-right sm:pr-6 ${tone(perf.returnPct ?? 0)}`}>{pct(perf.returnPct)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
+            Gain is the change in value that didn&apos;t come from money paid in. For an asset first recorded inside this window, its first value counts as the start, not as money paid in.
+          </p>
         </section>
       )}
     </div>

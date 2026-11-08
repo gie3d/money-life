@@ -36,7 +36,16 @@ export type Trade = {
   /** Trading fee for the whole trade, in the user's currency. */
   fee: number;
   note: string | null;
+  /**
+   * Set when this trade is worked out from a "Total" entry rather than entered as a buy or sale:
+   * after it the holding is `units` units costing `cost`. `cash` is the money that moved: paid in for a
+   * buy (the rise in cost), received for a sale (the units sold at `price`).
+   */
+  total?: { id: number; units: number; cost: number; cash: number };
 };
+
+/** A "Total" entry: at the end of `date` the holding was `units` units that had cost `cost`, at `price` a unit. */
+export type Total = { id: number; accountId: number; date: string; units: number; cost: number; price: number; note: string | null };
 
 export type PricePoint = { id: number; accountId: number; date: string; price: number };
 

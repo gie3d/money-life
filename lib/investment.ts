@@ -1,4 +1,4 @@
-import type { Entry, PricePoint, Trade } from "./types";
+import type { Entry, PricePoint, Total, Trade } from "./types";
 
 export type Replay = {
   quantity: number;
@@ -13,12 +13,48 @@ export type Replay = {
 
 const order = (a: Trade, b: Trade) => a.date.localeCompare(b.date) || a.id - b.id;
 
+/** Trades worked out from a total get ids from here up, so they sort after the day's own trades. */
+export const TOTAL_ID_BASE = 2 ** 45;
+const round8 = (n: number) => Math.round(n * 1e8) / 1e8;
+
+/**
+ * Turns each "Total" entry into the trade it stands for and merges them with the entered trades.
+ * A total counts as the end of its day, after that day's own trades. Against the holding just before:
+ * more units is a buy of the difference, paid for by the rise in cost; fewer is a sale of the difference
+ * at the total's price. Either way the holding afterwards is exactly the units and cost entered. This is
+ * worked out from scratch each time, so a total entered for an earlier date also moves the later ones.
+ * A total with no change in units still gives a zero-unit trade, which carries its price and cost.
+ */
+export function applyTotals(trades: Trade[], totals: Total[]): Trade[] {
+  if (totals.length === 0) return trades;
+  const out = [...trades];
+  for (const accountId of new Set(totals.map((t) => t.accountId))) {
+    const mine = trades.filter((t) => t.accountId === accountId);
+    const derived: Trade[] = [];
+    for (const s of totals.filter((t) => t.accountId === accountId).sort((a, b) => a.date.localeCompare(b.date))) {
+      const before = replay([...mine.filter((t) => t.date <= s.date), ...derived]);
+      const diff = round8(s.units - before.quantity);
+      const quantity = Math.abs(diff);
+      const cash = diff < 0 ? quantity * s.price : s.cost - before.cost;
+      derived.push({
+        id: TOTAL_ID_BASE + s.id, accountId, date: s.date, side: diff < 0 ? "sell" : "buy", quantity,
+        price: s.price, fee: 0, note: s.note, total: { id: s.id, units: s.units, cost: s.cost, cash },
+      });
+    }
+    out.push(...derived);
+  }
+  return out.sort(order);
+}
+
 /** Cash that moved for a trade: a buy costs the price plus the fee, a sale pays the price less the fee. */
-export const tradeCash = (t: Trade) => (t.side === "buy" ? t.quantity * t.price + t.fee : t.quantity * t.price - t.fee);
+export const tradeCash = (t: Trade) =>
+  t.total ? t.total.cash : t.side === "buy" ? t.quantity * t.price + t.fee : t.quantity * t.price - t.fee;
 
 /**
  * Replays trades oldest first. A buy's fee is added to its cost; a sale's fee comes off its proceeds.
  * Selling removes cost at the running average, so the average of what is left is unchanged.
+ * A trade from a "Total" entry instead sets the cost to the one entered; for a sale, the profit
+ * locked in is what the units fetched less the cost that came off.
  */
 export function replay(trades: Trade[]): Replay {
   let quantity = 0;
@@ -26,6 +62,12 @@ export function replay(trades: Trade[]): Replay {
   let realized = 0;
   let ok = true;
   for (const t of [...trades].sort(order)) {
+    if (t.total) {
+      if (t.side === "sell") realized += tradeCash(t) - (cost - t.total.cost);
+      quantity = t.total.units;
+      cost = t.total.cost;
+      continue;
+    }
     if (t.side === "buy") {
       quantity += t.quantity;
       cost += tradeCash(t);

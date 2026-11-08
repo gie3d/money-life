@@ -15,7 +15,7 @@ export default function FundingForm({ planId, assets, currency }: { planId: numb
     <form action={action} className="card space-y-4 p-5 sm:p-6">
       <div>
         <h2 className="text-lg">Pay from</h2>
-        <p className="text-xs text-ink-3">Tick the assets this plan can use. Their current values are the money available today. An asset used by two plans is counted in both.</p>
+        <p className="text-xs text-ink-3">Tick the assets this plan can use. Their current values are the money available today. An asset used by two plans is counted in both. This is only a forecast: nothing is ever taken out of your assets.</p>
       </div>
       {assets.length === 0 ? (
         <p className="text-sm text-ink-3">You have no assets yet. Add some on the Assets page.</p>

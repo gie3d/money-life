@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import ConfirmDelete from "@/components/ConfirmDelete";
@@ -13,7 +14,7 @@ import { getAccount, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
 import { priceHistory, tradeCash } from "@/lib/investment";
 import NetWorthChart from "@/components/NetWorthChart";
-import { extendTo, netWorthSeries } from "@/lib/performance";
+import { chartYears, extendTo, netWorthSeries, periodStart, PERIODS, type Period } from "@/lib/performance";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageProps<"/accounts/[id]">) 
   return { title: account?.name ?? "Asset" };
 }
 
-export default async function AccountPage({ params }: PageProps<"/accounts/[id]">) {
+export default async function AccountPage({ params, searchParams }: PageProps<"/accounts/[id]">) {
   const user = await requireUser();
   const id = Number((await params).id);
   const account = Number.isInteger(id) ? await getAccount(user.id, id) : null;
@@ -39,7 +40,19 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
   ]);
   const h = holdings([account], entries, trades, prices)[0];
   const history = priceHistory(trades, prices);
-  const series = extendTo(netWorthSeries([accountEntries(account, entries, trades, prices)], null, "9999-12-31"), new Date().toISOString().slice(0, 10));
+  const dated = [accountEntries(account, entries, trades, prices)];
+  const today = new Date().toISOString().slice(0, 10);
+
+  // What the charts show: a range ending today (all of it by default), or one calendar year.
+  const sp = await searchParams;
+  const firstDate = dated[0][0]?.date ?? today;
+  const years = chartYears(firstDate, today);
+  const year = years.find((y) => String(y) === sp.year);
+  const period = year ? null : ((PERIODS.find((p) => p.id === sp.period)?.id ?? "ALL") as Period);
+  const from = year ? `${year}-01-01` : periodStart(period!, today);
+  const to = year && `${year}-12-31` < today ? `${year}-12-31` : today;
+  // Never reach back past the first record: a "1Y" view of a 2-month-old asset is 2 months.
+  const series = extendTo(netWorthSeries(dated, from && from > firstDate ? from : null, to), to);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -67,6 +80,24 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
         </section>
       )}
 
+      {dated[0].length > 0 && (
+        <nav className="flex items-center gap-1.5 overflow-x-auto" aria-label="Chart range">
+          {PERIODS.map((p) => (
+            <Link key={p.id} href={`?period=${p.id}`} scroll={false} aria-current={p.id === period ? "page" : undefined}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${p.id === period ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
+              {p.label}
+            </Link>
+          ))}
+          <span className="mx-1.5 h-5 w-px shrink-0 bg-line" aria-hidden />
+          {years.map((y) => (
+            <Link key={y} href={`?year=${y}`} scroll={false} aria-current={y === year ? "page" : undefined}
+              className={`num shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${y === year ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
+              {y}
+            </Link>
+          ))}
+        </nav>
+      )}
+
       {series.length > 0 && (
         <section className="card p-4 sm:p-6">
           <h2 className="mb-3 text-lg">{investment ? "Value and cost" : "Balance over time"}</h2>
@@ -85,7 +116,7 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
 
       {investment ? (
         <div className="grid gap-5 md:grid-cols-2">
-          <TradeForm accountId={account.id} currency={cur} />
+          <TradeForm accountId={account.id} currency={cur} trades={trades} />
           <PriceForm accountId={account.id} currency={cur} />
         </div>
       ) : (
@@ -119,21 +150,36 @@ export default async function AccountPage({ params }: PageProps<"/accounts/[id]"
       {investment && trades.length > 0 && (
         <section className="card divide-y divide-line">
           <h2 className="p-4 text-lg sm:px-6">Trades</h2>
-          {[...trades].reverse().map((t) => (
-            <div key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
-              <span className={`w-12 text-xs font-bold uppercase ${t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>{t.side}</span>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{day(t.date)}</p>
-                {t.note && <p className="truncate text-xs text-ink-3">{t.note}</p>}
+          {[...trades].reverse().map((t) => {
+            const kind = t.total ? "total" : t.side;
+            return (
+              <div key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
+                <span className={`w-12 text-xs font-bold uppercase ${t.total ? "text-ink-2" : t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>{kind}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{day(t.date)}</p>
+                  {t.note && <p className="truncate text-xs text-ink-3">{t.note}</p>}
+                </div>
+                {t.total ? (
+                  <div className="text-right">
+                    <p className="num font-semibold">{units(t.total.units)} units · cost {money(t.total.cost, cur)}</p>
+                    <p className="num text-xs text-ink-3">
+                      <span className={t.quantity === 0 ? "" : t.side === "buy" ? "text-go-text" : "text-miss-text"}>
+                        {t.quantity === 0 ? "No change in units" : `${t.side === "buy" ? "Bought" : "Sold"} ${units(t.quantity)}`}
+                      </span>
+                      {" · price "}{unitPrice(t.price, cur)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-right">
+                    <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
+                    <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
+                  </div>
+                )}
+                <EditTradeButton trade={t} currency={cur} label={`Edit ${kind} on ${day(t.date)}`} />
+                <DeleteTradeButton accountId={account.id} tradeId={t.id} totalId={t.total?.id} label={`Delete ${kind} on ${day(t.date)}`} />
               </div>
-              <div className="text-right">
-                <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
-                <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
-              </div>
-              <EditTradeButton trade={t} currency={cur} label={`Edit ${t.side} on ${day(t.date)}`} />
-              <DeleteTradeButton accountId={account.id} tradeId={t.id} label={`Delete ${t.side} on ${day(t.date)}`} />
-            </div>
-          ))}
+            );
+          })}
         </section>
       )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { compactMoney, day, money } from "@/lib/format";
+import { axisDate, compactMoney, day, spansYears, money } from "@/lib/format";
 import FullscreenButton from "./FullscreenButton";
 import TradingChart from "./TradingChart";
 import type { Point } from "@/lib/performance";
@@ -12,6 +12,7 @@ export default function NetWorthChart({ data, currency, title, showCost = false 
   if (data.length < 2) {
     return <p className="py-16 text-center text-sm text-ink-3">Add at least two dated values to see the line.</p>;
   }
+  const long = spansYears(data);
   return (
     <div className="relative">
       <div className="absolute right-0 top-0 z-10">
@@ -29,7 +30,7 @@ export default function NetWorthChart({ data, currency, title, showCost = false 
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--line)" vertical={false} />
-          <XAxis dataKey="date" tickFormatter={(d: string) => day(d, false)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
+          <XAxis dataKey="date" tickFormatter={(d: string) => axisDate(d, long)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
           <YAxis width={52} tickFormatter={(n: number) => compact(n, currency)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} domain={["auto", "auto"]} />
           <Tooltip
             labelFormatter={(d) => day(String(d))}
