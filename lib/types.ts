@@ -118,6 +118,8 @@ export type Plan = {
   monthlySaving: number;
   /** Free text about the plan, in Markdown. */
   notes: string | null;
+  /** Put aside: kept, but off the Plans page and out of the forecast. */
+  archived: boolean;
 };
 
 export const FREQUENCIES = [
@@ -156,4 +158,37 @@ export type Bill = {
   planAmount: number | null;
   /** What-if: drop the bill from the planned total. */
   planDrop: boolean;
+};
+
+/** Money to build up by a date. The assets in `accountIds` count towards it; the plan is in its versions. */
+export type Goal = {
+  id: number;
+  name: string;
+  kind: "retirement" | "other";
+  birthDate: string | null;
+  retireAge: number | null;
+  notes: string | null;
+  accountIds: number[];
+};
+
+/** One version of a goal's plan. Rates are fractions (0.06 for 6%). */
+export type GoalVersion = {
+  id: number;
+  goalId: number;
+  startDate: string;
+  startValue: number;
+  targetDate: string;
+  targetMode: "amount" | "spending";
+  /** The amount to have on the target date (amount mode). */
+  targetAmount: number | null;
+  /** Monthly spending in retirement in money of the start date (spending mode). */
+  monthlySpending: number | null;
+  withdrawalRate: number;
+  expectedReturn: number;
+  inflation: number;
+  monthlyContribution: number;
+  /** Yearly rise of the monthly contribution. */
+  contributionGrowth: number;
+  note: string | null;
+  createdAt: string;
 };

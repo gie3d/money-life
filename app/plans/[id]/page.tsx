@@ -8,7 +8,7 @@ import PlanItemForm from "@/components/PlanItemForm";
 import PlanSettings from "@/components/PlanSettings";
 import Markdown from "@/components/Markdown";
 import NotesEditor from "@/components/NotesEditor";
-import { deletePlan, deletePlanItem, updatePlanNotes } from "@/app/actions/plans";
+import { deletePlan, deletePlanItem, setPlanArchived, updatePlanNotes } from "@/app/actions/plans";
 import { getPlan, listAccounts, listCategories, listEntries, listPlanAssets, listPlanItems, listPrices, listTrades } from "@/lib/data";
 import { sortByCategory } from "@/lib/group";
 import { day, money, monthLabel, tone } from "@/lib/format";
@@ -54,8 +54,13 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans", href: "/plans" }, { label: plan.name }]} />
-      <h1 className="text-3xl">{plan.name}</h1>
+      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans", href: "/plans" }, ...(plan.archived ? [{ label: "All plans", href: "/plans/all" }] : []), { label: plan.name }]} />
+      <h1 className="text-3xl">{plan.name}{plan.archived && <span className="ml-3 align-middle text-sm font-semibold text-ink-3">archived</span>}</h1>
+      {plan.archived && (
+        <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
+          This plan is archived: it&apos;s kept, but not shown on the Plans page or counted in the forecast on Overview.
+        </p>
+      )}
 
       {plan.notes ? (
         <section className="card p-5 sm:p-6">
@@ -169,6 +174,10 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
         </section>
       )}
 
+      <div className="flex flex-wrap gap-2">
+      <form action={setPlanArchived.bind(null, plan.id, !plan.archived)}>
+        <button className="btn btn-quiet">{plan.archived ? "Bring back" : "Archive plan"}</button>
+      </form>
       <ConfirmDelete
         action={deletePlan.bind(null, plan.id)}
         title={`Delete ${plan.name}?`}
@@ -178,6 +187,7 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
       >
         Delete plan
       </ConfirmDelete>
+      </div>
     </div>
   );
 }

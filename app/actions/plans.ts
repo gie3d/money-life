@@ -53,6 +53,13 @@ export async function updatePlanNotes(planId: number, _: FormState, form: FormDa
   revalidatePath(`/plans/${planId}`);
 }
 
+/** Puts a plan aside (or brings it back). Archived plans keep everything but leave the Plans page and the forecast. */
+export async function setPlanArchived(planId: number, archived: boolean) {
+  const user = await requireUser();
+  await pool.query("UPDATE plans SET archived = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, archived]);
+  revalidatePath("/", "layout");
+}
+
 export async function deletePlan(planId: number) {
   const user = await requireUser();
   await pool.query("DELETE FROM plans WHERE id = $1 AND user_id = $2", [planId, user.id]);

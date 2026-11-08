@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Bill, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -139,15 +139,16 @@ export async function listPrices(userId: number, accountId?: number): Promise<Pr
 
 const toPlan = (r: Record<string, unknown>): Plan => ({
   id: Number(r.id), name: r.name as string, monthlySaving: Number(r.monthly_saving), notes: (r.notes as string | null) ?? null,
+  archived: r.archived as boolean,
 });
 
 export async function listPlans(userId: number): Promise<Plan[]> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
+  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
   return rows.map(toPlan);
 }
 
 export async function getPlan(userId: number, id: number): Promise<Plan | null> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
+  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
   return rows[0] ? toPlan(rows[0]) : null;
 }
 
@@ -193,5 +194,39 @@ export async function listBills(userId: number): Promise<Bill[]> {
     firstDue: r.first_due as string, endDate: (r.end_date as string | null) ?? null, group: r.group_name as string,
     accountId: r.account_id === null ? null : Number(r.account_id), note: (r.note as string | null) ?? null,
     planAmount: r.plan_amount === null ? null : Number(r.plan_amount), planDrop: r.plan_drop as boolean,
+  }));
+}
+
+/** The user's goals, oldest first, each with the assets that count towards it. */
+export async function listGoals(userId: number): Promise<Goal[]> {
+  const { rows } = await pool.query(
+    `SELECT g.id, g.name, g.kind, g.birth_date::text AS birth_date, g.retire_age, g.notes,
+            COALESCE(array_agg(ga.account_id) FILTER (WHERE ga.account_id IS NOT NULL), '{}') AS account_ids
+     FROM goals g LEFT JOIN goal_assets ga ON ga.goal_id = g.id
+     WHERE g.user_id = $1 GROUP BY g.id ORDER BY g.created_at, g.id`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), name: r.name as string, kind: r.kind as Goal["kind"], birthDate: (r.birth_date as string | null) ?? null,
+    retireAge: r.retire_age === null ? null : Number(r.retire_age), notes: (r.notes as string | null) ?? null,
+    accountIds: (r.account_ids as (string | number)[]).map(Number),
+  }));
+}
+
+/** Every plan version of the user's goals (or of one goal), oldest first; the last of a goal is its current plan. */
+export async function listGoalVersions(userId: number, goalId?: number): Promise<GoalVersion[]> {
+  const { rows } = await pool.query(
+    `SELECT v.* , v.start_date::text AS start_date, v.target_date::text AS target_date, v.created_at::text AS created_at
+     FROM goal_versions v JOIN goals g ON g.id = v.goal_id
+     WHERE g.user_id = $1 ${goalId ? "AND g.id = $2" : ""} ORDER BY v.created_at, v.id`,
+    goalId ? [userId, goalId] : [userId],
+  );
+  const n = (v: unknown) => (v === null ? null : Number(v));
+  return rows.map((r) => ({
+    id: Number(r.id), goalId: Number(r.goal_id), startDate: r.start_date as string, startValue: Number(r.start_value),
+    targetDate: r.target_date as string, targetMode: r.target_mode as GoalVersion["targetMode"], targetAmount: n(r.target_amount),
+    monthlySpending: n(r.monthly_spending), withdrawalRate: Number(r.withdrawal_rate), expectedReturn: Number(r.expected_return),
+    inflation: Number(r.inflation), monthlyContribution: Number(r.monthly_contribution), contributionGrowth: Number(r.contribution_growth),
+    note: (r.note as string | null) ?? null, createdAt: r.created_at as string,
   }));
 }

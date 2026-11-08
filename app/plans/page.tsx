@@ -19,18 +19,31 @@ export default async function PlansPage() {
   ]);
   const held = holdings(accounts, entries, trades, prices);
   const today = new Date().toISOString().slice(0, 10);
+  const active = plans.filter((p) => !p.archived);
+  const archivedCount = plans.length - active.length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans" }]} />
-      <div>
-        <h1 className="text-3xl">Plans</h1>
-        <p className="text-sm text-ink-3">Plan something you are going to pay for, and see if your assets cover it, month by month.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl">Plans</h1>
+          <p className="text-sm text-ink-3">Plan something you are going to pay for, and see if your assets cover it, month by month.</p>
+        </div>
+        {plans.length > 0 && (
+          <Link href="/plans/all" className="text-sm font-semibold text-brand">
+            All plans ({plans.length}{archivedCount > 0 ? `, ${archivedCount} archived` : ""}) →
+          </Link>
+        )}
       </div>
 
-      {plans.length > 0 && (
+      {active.length === 0 && archivedCount > 0 && (
+        <p className="text-sm text-ink-3">All your plans are archived. Open <Link href="/plans/all" className="font-semibold text-brand">All plans</Link> to bring one back.</p>
+      )}
+
+      {active.length > 0 && (
         <div className="grid gap-5 md:grid-cols-2">
-          {plans.map((plan) => {
+          {active.map((plan) => {
             const mine = items.filter((i) => i.planId === plan.id);
             const ids = new Set(funding.get(plan.id) ?? []);
             const funds = held.filter((h) => ids.has(h.account.id)).reduce((s, h) => s + h.value, 0);

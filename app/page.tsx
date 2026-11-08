@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
+import CollapsibleRows from "@/components/CollapsibleRows";
 import ForecastChart from "@/components/ForecastChart";
 import PieCard from "@/components/PieCard";
 import { listAccounts, listCategories, listEntries, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
@@ -74,7 +75,9 @@ export default async function Overview() {
   const today = new Date().toISOString().slice(0, 10);
   const planName = new Map(plans.map((p) => [p.id, p.name]));
   const itemPlan = new Map(planItems.map((i) => [i.id, planName.get(i.planId) ?? ""]));
-  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems));
+  // Archived plans are put aside, so their costs are left out.
+  const activePlans = new Set(plans.filter((p) => !p.archived).map((p) => p.id));
+  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems.filter((i) => activePlans.has(i.planId))));
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
 
   return (
@@ -144,7 +147,10 @@ export default async function Overview() {
       </div>
 
       <section className="card overflow-hidden">
-        <h2 className="p-4 text-lg sm:px-6">Assets</h2>
+        <div className="flex flex-wrap items-baseline gap-x-3 p-4 sm:px-6">
+          <h2 className="text-lg">Assets</h2>
+          <p className="text-xs text-ink-3">Click a category to see its assets.</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] text-sm">
             <thead>
@@ -158,15 +164,18 @@ export default async function Overview() {
               </tr>
             </thead>
             {groups.map((g) => (
-              <tbody key={g.category.id} className="divide-y divide-line">
-                <tr className="bg-surface-2 font-bold">
-                  <td className="py-2.5 pl-4 sm:pl-6" colSpan={3}>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="size-2.5 rounded-full" style={{ background: g.category.color }} />
-                      {g.category.name}
-                      <span className="text-xs font-normal text-ink-3">{g.rows.length} {g.rows.length === 1 ? "asset" : "assets"} · {totalValue > 0 ? `${((g.value / totalValue) * 100).toFixed(1)}%` : "—"} of total</span>
-                    </span>
-                  </td>
+              <CollapsibleRows
+                key={g.category.id}
+                className="divide-y divide-line"
+                span={3}
+                label={
+                  <span className="inline-flex items-center gap-2">
+                    <span className="size-2.5 rounded-full" style={{ background: g.category.color }} />
+                    {g.category.name}
+                    <span className="text-xs font-normal text-ink-3">{g.rows.length} {g.rows.length === 1 ? "asset" : "assets"} · {totalValue > 0 ? `${((g.value / totalValue) * 100).toFixed(1)}%` : "—"} of total</span>
+                  </span>
+                }
+                cells={<>
                   <td className="num py-2.5 text-right">{g.investment ? money(g.cost, cur) : "—"}</td>
                   <td className="num py-2.5 text-right">{money(g.value, cur)}</td>
                   {g.investment ? (
@@ -177,7 +186,8 @@ export default async function Overview() {
                   ) : (
                     <td className="py-2.5 pr-4 text-right text-ink-3 sm:pr-6">—</td>
                   )}
-                </tr>
+                </>}
+              >
               {g.rows.map((h) => (
                 <tr key={h.account.id}>
                   <td className="py-3 pl-8 font-semibold sm:pl-10">
@@ -198,7 +208,7 @@ export default async function Overview() {
                   )}
                 </tr>
               ))}
-              </tbody>
+              </CollapsibleRows>
             ))}
             <tfoot>
               <tr className="border-t border-line font-bold">
