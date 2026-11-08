@@ -1,10 +1,38 @@
 "use client";
 
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, Area } from "recharts";
-import { axisDate, compactMoney, dayWithAge, money } from "@/lib/format";
+import { axisDate, compactMoney, dayWithAge, money, pct, signedMoney, tone } from "@/lib/format";
 
 export type GoalPoint = { date: string; planned: number | null; actual: number | null; projected: number | null };
 const NAMES: Record<string, string> = { planned: "Plan", actual: "Actual", projected: "Carrying on as planned" };
+const COLORS: Record<string, string> = { planned: "var(--ink-3)", actual: "var(--brand)", projected: "var(--sky)" };
+
+/** The hover box: each line's value, then how far the actual (or, from today on, the projection) is from the plan. */
+function GoalTooltip({ active, payload, currency, birthDate }: {
+  active?: boolean; payload?: { payload: GoalPoint }[]; currency: string; birthDate?: string | null;
+}) {
+  const pt = payload?.[0]?.payload;
+  if (!active || !pt) return null;
+  const lines = (["actual", "planned", "projected"] as const).filter((k) => pt[k] !== null);
+  const against = pt.actual !== null ? pt.actual : pt.projected;
+  const diff = against !== null && pt.planned !== null ? against - pt.planned : null;
+  return (
+    <div className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink shadow-lg">
+      <p className="mb-1.5">{dayWithAge(pt.date, birthDate)}</p>
+      {lines.map((k) => (
+        <p key={k} className="num flex justify-between gap-6" style={{ color: COLORS[k] }}>
+          <span>{NAMES[k]}</span><span>{money(pt[k]!, currency)}</span>
+        </p>
+      ))}
+      {diff !== null && pt.planned !== null && Math.abs(diff) >= 0.005 && (
+        <p className={`num mt-1.5 flex justify-between gap-6 border-t border-line pt-1.5 font-semibold ${tone(diff)}`}>
+          <span>{pt.actual !== null ? "Difference from plan" : "Projected vs plan"}</span>
+          <span>{signedMoney(diff, currency)}{pt.planned > 0 && ` · ${pct(diff / pt.planned)}`}</span>
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** The plan (dashed), what actually happened (solid), and where carrying on as planned from today leads (dotted). */
 export default function GoalChart({ points, target, today, currency, birthDate }: {
@@ -34,11 +62,7 @@ export default function GoalChart({ points, target, today, currency, birthDate }
             <YAxis width={56} tickFormatter={(n: number) => compactMoney(n, currency)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, "auto"]} />
             <ReferenceLine y={target} stroke="var(--go)" strokeWidth={1.5} />
             <ReferenceLine x={today} stroke="var(--ink-3)" strokeDasharray="2 3" />
-            <Tooltip
-              labelFormatter={(d) => dayWithAge(String(d), birthDate)}
-              formatter={(v, name) => [money(Number(v), currency), NAMES[String(name)] ?? String(name)]}
-              contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
-            />
+            <Tooltip content={<GoalTooltip currency={currency} birthDate={birthDate} />} />
             <Line type="linear" dataKey="planned" stroke="var(--ink-3)" strokeWidth={1.75} strokeDasharray="5 4" dot={false} />
             <Area type="linear" dataKey="actual" stroke="var(--brand)" strokeWidth={2.5} fill="url(#goal-actual)" connectNulls={false} />
             <Line type="linear" dataKey="projected" stroke="var(--sky)" strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />
