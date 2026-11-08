@@ -3,14 +3,17 @@ import { notFound } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import ConfirmDelete from "@/components/ConfirmDelete";
 import DeleteTradeButton from "@/components/DeleteTradeButton";
+import EditAccountButton from "@/components/EditAccountButton";
 import EditPriceButton from "@/components/EditPriceButton";
 import EditTradeButton from "@/components/EditTradeButton";
 import EntryForm from "@/components/EntryForm";
+import Markdown from "@/components/Markdown";
+import NotesEditor from "@/components/NotesEditor";
 import ProfitChart from "@/components/ProfitChart";
 import PriceForm from "@/components/PriceForm";
 import TradeForm from "@/components/TradeForm";
 import { deleteAccount, deleteEntry, deletePrice, setArchived } from "@/app/actions/money";
-import { getAccount, listEntries, listPrices, listTrades } from "@/lib/data";
+import { getAccount, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
 import { priceHistory, tradeCash } from "@/lib/investment";
 import NetWorthChart from "@/components/NetWorthChart";
@@ -33,10 +36,11 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
   const cur = user.currency;
   const investment = isInvestment(account);
-  const [entries, trades, prices] = await Promise.all([
+  const [entries, trades, prices, categories] = await Promise.all([
     investment ? [] : listEntries(user.id, account.id),
     investment ? listTrades(user.id, account.id) : [],
     investment ? listPrices(user.id, account.id) : [],
+    listCategories(user.id),
   ]);
   const h = holdings([account], entries, trades, prices)[0];
   const history = priceHistory(trades, prices);
@@ -59,8 +63,26 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Assets", href: "/accounts" }, { label: account.name }]} />
       <div>
         <p className="eyebrow">{account.categoryName} · {labelOf(TYPES, account.type)} · {labelOf(LIQUIDITY, account.liquidity)}</p>
-        <h1 className="text-3xl">{account.name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl">{account.name}</h1>
+          <EditAccountButton account={account} categories={categories} locked={entries.length + trades.length + prices.length > 0} />
+        </div>
       </div>
+
+      {account.notes ? (
+        <section className="card p-5 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-lg">Notes</h2>
+            <NotesEditor accountId={account.id} notes={account.notes} />
+          </div>
+          <Markdown>{account.notes}</Markdown>
+        </section>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-ink-3">
+          <NotesEditor accountId={account.id} notes={null} />
+          <span>Keep details about this asset here: where it&apos;s held, account numbers, why you bought it.</span>
+        </div>
+      )}
 
       {h && !investment && (
         <section className="card p-5 sm:p-6">

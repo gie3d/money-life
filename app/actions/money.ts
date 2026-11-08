@@ -63,6 +63,51 @@ export async function deleteEntry(entryId: number) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Renames an asset and changes its category and liquidity. Once it has records, its category can only change to
+ * one tracked the same way (investment or balance), or those records would no longer be shown or counted.
+ */
+export async function updateAccount(accountId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const account = await getAccount(user.id, accountId);
+  if (!account) return { error: "That asset no longer exists." };
+  const name = String(form.get("name") ?? "").trim();
+  const categoryId = Number(form.get("category"));
+  const liquidity = String(form.get("liquidity") ?? "");
+  if (!name) return { error: "Give the asset a name." };
+  const { rows: cats } = await pool.query("SELECT type FROM categories WHERE id = $1 AND user_id = $2", [categoryId, user.id]);
+  if (!cats[0]) return { error: "Pick a category from the list." };
+  if (!LIQUIDITY.some((l) => l.id === liquidity)) return { error: "Pick how liquid it is." };
+  if (isInvestment({ type: cats[0].type }) !== isInvestment(account) && (await hasRecords(accountId))) {
+    return { error: isInvestment(account)
+      ? "This asset has trades, so it has to stay in an investment category."
+      : "This asset has balances, so it has to stay in a cash or saving category." };
+  }
+
+  await pool.query("UPDATE accounts SET name = $3, category_id = $4, liquidity = $5 WHERE id = $1 AND user_id = $2", [accountId, user.id, name, categoryId, liquidity]);
+  revalidatePath("/", "layout");
+}
+
+/** True if anything has been recorded for the asset: balances, trades, totals or prices. */
+async function hasRecords(accountId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT EXISTS (SELECT 1 FROM entries WHERE account_id = $1) OR EXISTS (SELECT 1 FROM transactions WHERE account_id = $1)
+         OR EXISTS (SELECT 1 FROM totals WHERE account_id = $1) OR EXISTS (SELECT 1 FROM prices WHERE account_id = $1) AS any`,
+    [accountId],
+  );
+  return rows[0].any as boolean;
+}
+
+/** Saves the free-text notes of an asset; empty clears them. */
+export async function updateNotes(accountId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
+  if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
+  const { rowCount } = await pool.query("UPDATE accounts SET notes = $3 WHERE id = $1 AND user_id = $2", [accountId, user.id, notes || null]);
+  if (!rowCount) return { error: "That asset no longer exists." };
+  revalidatePath(`/accounts/${accountId}`);
+}
+
 export async function setArchived(accountId: number, archived: boolean) {
   const user = await requireUser();
   await pool.query("UPDATE accounts SET archived = $3 WHERE id = $1 AND user_id = $2", [accountId, user.id, archived]);

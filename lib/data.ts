@@ -14,6 +14,7 @@ const toAccount = (r: Record<string, unknown>): Account => ({
   type: r.type as string,
   liquidity: r.liquidity as string,
   archived: r.archived as boolean,
+  notes: (r.notes as string | null) ?? null,
 });
 
 const toEntry = (r: Record<string, unknown>): Entry => ({
@@ -30,7 +31,7 @@ const ENTRY_COLS = "e.id, e.account_id, e.date::text AS date, e.value, e.contrib
 
 export async function listAccounts(userId: number, includeArchived = false): Promise<Account[]> {
   const { rows } = await pool.query(
-    `SELECT a.id, a.name, a.category_id, c.name AS category_name, c.color AS category_color, c.type, a.liquidity, a.archived
+    `SELECT a.id, a.name, a.category_id, c.name AS category_name, c.color AS category_color, c.type, a.liquidity, a.archived, a.notes
      FROM accounts a JOIN categories c ON c.id = a.category_id
      WHERE a.user_id = $1 ${includeArchived ? "" : "AND NOT a.archived"} ORDER BY a.created_at, a.id`,
     [userId],
@@ -39,7 +40,7 @@ export async function listAccounts(userId: number, includeArchived = false): Pro
 }
 
 export async function getAccount(userId: number, id: number): Promise<Account | null> {
-  const { rows } = await pool.query(`SELECT a.id, a.name, a.category_id, c.name AS category_name, c.color AS category_color, c.type, a.liquidity, a.archived
+  const { rows } = await pool.query(`SELECT a.id, a.name, a.category_id, c.name AS category_name, c.color AS category_color, c.type, a.liquidity, a.archived, a.notes
      FROM accounts a JOIN categories c ON c.id = a.category_id WHERE a.id = $1 AND a.user_id = $2`, [id, userId]);
   return rows[0] ? toAccount(rows[0]) : null;
 }

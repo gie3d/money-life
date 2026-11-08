@@ -10,6 +10,8 @@ export type Account = {
   type: string;
   liquidity: string;
   archived: boolean;
+  /** Free text about the asset, in Markdown. */
+  notes: string | null;
 };
 
 export type Entry = {
