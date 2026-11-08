@@ -32,6 +32,9 @@ export default async function PlansPage() {
   const pooled = held.filter((h) => fundIds.has(h.account.id)).reduce((s, h) => s + h.value, 0);
   const saving = active.reduce((s, p) => s + p.monthlySaving, 0);
   const combined = schedule(payments(items.filter((i) => activeIds.has(i.planId))), pooled, saving, today);
+  const paidSoFar = combined.past.reduce((t, x) => t + x.amount, 0);
+  const year = today.slice(0, 4);
+  const dueThisYear = combined.rows.flatMap((row) => row.payments).filter((x) => x.date.startsWith(year)).reduce((t, x) => t + x.amount, 0);
   const series = active.map((p, i) => ({ key: `p${p.id}`, name: p.name, color: PALETTE[i % PALETTE.length] }));
   const chartRows = combined.rows.map((r) => {
     const row: AllPlansRow = { month: r.month, balance: r.balance };
@@ -58,6 +61,26 @@ export default async function PlansPage() {
         <p className="text-sm text-ink-3">All your plans are archived. Open <Link href="/plans/all" className="font-semibold text-brand">All plans</Link> to bring one back.</p>
       )}
 
+      {active.length > 0 && (
+        <section className="card grid grid-cols-1 gap-4 p-5 sm:grid-cols-3 sm:p-6">
+          <div>
+            <p className="eyebrow">Paid so far</p>
+            <p className="num text-xl font-bold">{money(paidSoFar, cur)}</p>
+            <p className="text-xs text-ink-3">dated before today</p>
+          </div>
+          <div>
+            <p className="eyebrow">To pay this year</p>
+            <p className="num text-xl font-bold">{money(dueThisYear, cur)}</p>
+            <p className="text-xs text-ink-3">from today to Dec 31, {year}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Still to pay in all</p>
+            <p className="num text-xl font-bold">{money(combined.remaining, cur)}</p>
+            <p className="text-xs text-ink-3">of {money(combined.total, cur)} across active plans</p>
+          </div>
+        </section>
+      )}
+
       {chartRows.length > 0 && (
         <section className="card p-4 sm:p-6">
           <h2 className="mb-1 text-lg">All plans together</h2>
@@ -80,6 +103,8 @@ export default async function PlansPage() {
             const all = payments(mine);
             const next = all.find((p) => p.date >= today);
             const end = finish(all, today);
+            const paid = s.total - s.remaining;
+            const thisYear = all.filter((x) => x.date >= today && x.date.startsWith(year)).reduce((t, x) => t + x.amount, 0);
             const paidShare = s.total > 0 ? (s.total - s.remaining) / s.total : 0;
             return (
               <Link key={plan.id} href={`/plans/${plan.id}`} className="card block space-y-3 p-5 sm:p-6">
@@ -105,6 +130,9 @@ export default async function PlansPage() {
                         </div>
                       </div>
                     )}
+                    <p className="text-sm text-ink-3">
+                      Paid so far <span className="num font-semibold text-ink">{money(paid, cur)}</span> · to pay this year <span className="num font-semibold text-ink">{money(thisYear, cur)}</span>
+                    </p>
                     <p className="text-sm text-ink-3">
                       {s.remaining > 0 ? <>Still to pay <span className="num font-semibold text-ink">{money(s.remaining, cur)}</span>{next && <> · next {day(next.date)}</>}</> : "Everything is already paid."}
                     </p>
