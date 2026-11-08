@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-goals.mjs
 import assert from "node:assert/strict";
-import { contributionAt, monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, yearly } from "../lib/goals.ts";
+import { combined, contributionAt, monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, yearly } from "../lib/goals.ts";
 
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${a} !~ ${b}`);
 const plan = (o = {}) => ({
@@ -46,4 +46,26 @@ near(s.plannedPaid, 30_000); near(s.actualPaid, 34_000); near(s.fromContribution
 const ys = yearly(p0, lists, "2026-07-01");
 assert.equal(ys[0].year, 2026); near(ys[0].actualPaid, 34_000); near(ys[0].actualEnd, 140_000); near(ys[0].plannedPaid, 55_000);
 assert.equal(ys[1].actualPaid, null); assert.equal(ys.at(-1).year, 2036);
+
+// Per asset: each grows at its own rate with its own monthly amount; the path adds them up.
+{
+  const pa = plan({ expectedReturn: 0, monthlyContribution: 0, assets: [
+    { accountId: 1, startValue: 100_000, rate: 0.12, monthly: 0 },
+    { accountId: 2, startValue: 50_000, rate: 0, monthly: 1_000 },
+  ] });
+  const one = path(pa, 0, undefined, 12).at(-1);
+  near(one.value, 112_000 + 62_000); near(one.contributed, 12_000);
+  // From today's actual values by account.
+  near(path(pa, 0, new Map([[1, 200_000], [2, 0]]), 12).at(-1).value, 224_000 + 12_000);
+  // A single amount is shared like the start values (2:1).
+  near(path(pa, 0, 300_000, 12).at(-1).value, 224_000 + 112_000);
+  // Required monthly is shared like the planned amounts, so landing on the target works per asset too.
+  const need = requiredMonthly(pa, 0);
+  const scaled = { ...pa, assets: pa.assets.map((a) => ({ ...a, monthly: a.monthly > 0 ? need : 0 })) };
+  near(path(scaled).at(-1).value, 1_000_000, 1e-9);
+  // Combined figures: rate weighted by value.
+  const c = combined(pa.assets);
+  near(c.startValue, 150_000); near(c.monthly, 1_000); near(c.rate, 0.08);
+  assert.ok(reachDate(pa, 0) !== null);
+}
 console.log("goals ok");

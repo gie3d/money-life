@@ -11,11 +11,7 @@ import type { Goal, GoalVersion } from "@/lib/types";
 export default function GoalForm({ currency, assets, today }: { currency: string; assets: TickAsset[]; today: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createGoal, undefined);
   return (
-    <form action={action} className="card space-y-4 p-5 sm:p-6">
-      <div>
-        <h2 className="text-lg">New goal</h2>
-        <p className="text-xs text-ink-3">Money to build up by a date: retirement, a child&apos;s education, a house deposit.</p>
-      </div>
+    <form action={action} className="space-y-4">
       <GoalFields currency={currency} assets={assets} today={today} />
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <button className="btn" disabled={pending || assets.length === 0}>{pending ? "Creating…" : "Create goal"}</button>
@@ -27,7 +23,7 @@ export default function GoalForm({ currency, assets, today }: { currency: string
 export function ReviseGoalForm({ goal, plan, currency, assets, today }: { goal: Goal; plan: GoalVersion; currency: string; assets: TickAsset[]; today: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(reviseGoal.bind(null, goal.id), undefined);
   return (
-    <form action={action} className="card space-y-4 p-5 sm:p-6">
+    <form action={action} className="space-y-4">
       <GoalFields currency={currency} assets={assets} goal={goal} plan={plan} today={today} />
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <div className="flex gap-2">

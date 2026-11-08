@@ -191,4 +191,6 @@ export type GoalVersion = {
   contributionGrowth: number;
   note: string | null;
   createdAt: string;
+  /** Each asset's own start value, expected yearly rate and monthly amount; empty for a plan made as one pot. */
+  assets: { accountId: number; startValue: number; rate: number; monthly: number }[];
 };

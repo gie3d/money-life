@@ -4,7 +4,7 @@ import { useState } from "react";
 import { money } from "@/lib/format";
 import { groupBy } from "@/lib/group";
 
-export type TickAsset = { id: number; name: string; color: string; categoryId: number; category: string; value: number };
+export type TickAsset = { id: number; name: string; color: string; categoryId: number; category: string; value: number; pastReturn?: number | null };
 
 /**
  * Assets to tick, grouped by category (given in the categories' order), each category with a box that ticks all of

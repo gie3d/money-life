@@ -10,7 +10,9 @@ import { deleteGoal, deleteGoalVersion, updateGoalNotes } from "@/app/actions/go
 import { listGoals, listGoalVersions } from "@/lib/data";
 import { day, money, signedMoney, tone } from "@/lib/format";
 import { goalAssets } from "@/lib/goal-data";
-import { monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, valueOn, yearly } from "@/lib/goals";
+import { monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, valueOn, valuesOn, yearly } from "@/lib/goals";
+import { groupBy } from "@/lib/group";
+import { accountPerformance } from "@/lib/performance";
 import { monthsText } from "@/lib/plan";
 import { requireUser } from "@/lib/session";
 
@@ -42,10 +44,12 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
   const target = targetValue(plan);
   const s = standing(plan, lists, today);
   const n = monthsBetween(plan.startDate, plan.targetDate);
-  const projection = path(plan, s.k, s.actual);
+  // Carrying on as planned starts from each asset's actual value today, each at its own expected rate.
+  const nowByAsset = plan.assets.length > 0 ? valuesOn(lists, today) : s.actual;
+  const projection = path(plan, s.k, nowByAsset);
   const projectedEnd = projection.at(-1)!.value;
-  const need = requiredMonthly(plan, s.k, s.actual);
-  const reach = reachDate(plan, s.k, s.actual);
+  const need = requiredMonthly(plan, s.k, nowByAsset);
+  const reach = reachDate(plan, s.k, nowByAsset);
   const years = yearly(plan, lists, today);
 
   // One point a month: the plan throughout, the actual value up to today, the projection from today on.
@@ -57,7 +61,48 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
   }));
   if (s.k < n) points.splice(points.findIndex((p) => p.date > today), 0, { date: today, planned: s.planned, actual: s.actual, projected: s.actual });
 
-  const assets = ticks.filter((a) => goal.accountIds.includes(a.id));
+
+  // The plan's assets year by year: from the year the plan started to this one, plan against actual at each year's end.
+  const yearCols: { year: number; from: string; to: string; toDate: boolean }[] = [];
+  for (let y = +plan.startDate.slice(0, 4); y <= +today.slice(0, 4) && `${y}-01-01` <= plan.targetDate; y++) {
+    const to = `${y}-12-31` < today ? `${y}-12-31` : today;
+    const from = `${y - 1}-12-31` > plan.startDate ? `${y - 1}-12-31` : plan.startDate;
+    yearCols.push({ year: y, from, to, toDate: to === today });
+  }
+  const listOf = (id: number) => lists.find((l) => l[0]?.accountId === id) ?? [];
+  const order = ticks.map((t) => t.id);
+  const planRows = (plan.assets.length > 0 ? plan.assets : goal.accountIds.map((id) => ({ accountId: id, startValue: 0, rate: plan.expectedReturn, monthly: 0 })))
+    .map((pa) => {
+      const t = ticks.find((x) => x.id === pa.accountId);
+      const alone = { ...plan, assets: [pa] };
+      const list = listOf(pa.accountId);
+      return {
+        id: pa.accountId, name: t?.name ?? "A removed asset", categoryId: t?.categoryId ?? 0, category: t?.category ?? "Other",
+        color: t?.color ?? "var(--ink-3)", rate: pa.rate, monthly: pa.monthly,
+        years: yearCols.map((y) => {
+          const kFrom = monthsBetween(plan.startDate, y.from);
+          const kTo = monthsBetween(plan.startDate, y.to);
+          const planFrom = path(alone, 0, undefined, kFrom).at(-1)!.value;
+          const planTo = path(alone, 0, undefined, kTo).at(-1)!.value;
+          const months = kTo - kFrom;
+          return {
+            plan: planTo,
+            planStart: planFrom,
+            actual: valueOn([list], y.to),
+            planGrowth: months > 0 ? Math.pow(1 + pa.rate, months / 12) - 1 : null,
+            actualReturn: list.length > 0 ? (accountPerformance(list, y.from, y.to)?.returnPct ?? null) : null,
+          };
+        }),
+      };
+    })
+    .sort((x, y) => order.indexOf(x.id) - order.indexOf(y.id));
+  // A group's year: values add up; growth figures are left out, since they don't add.
+  const sumYear = (rows: typeof planRows, i: number) => ({
+    plan: rows.reduce((t, r) => t + r.years[i].plan, 0),
+    actual: rows.reduce((t, r) => t + r.years[i].actual, 0),
+    planGrowth: null,
+    actualReturn: null,
+  });
   const ahead = s.gap >= 0;
 
   return (
@@ -70,6 +115,21 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         </div>
         <Link href={`/goals/${id}/revise`} className="btn">Revise plan</Link>
       </div>
+
+      {goal.notes ? (
+        <section className="card p-5 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-lg">Notes</h2>
+            <NotesEditor notes={goal.notes} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" />
+          </div>
+          <Markdown>{goal.notes}</Markdown>
+        </section>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-ink-3">
+          <NotesEditor notes={null} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" />
+          <span>Keep notes on this goal: why, what you decided, links.</span>
+        </div>
+      )}
 
       {!isCurrent && (
         <p className="rounded-xl bg-sky-soft px-4 py-2.5 text-sm">
@@ -88,7 +148,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
 
       <section className="card p-4 sm:p-6">
         <h2 className="mb-3 text-lg">Plan and actual</h2>
-        <GoalChart points={points} target={target} today={today} currency={cur} />
+        <GoalChart points={points} target={target} today={today} currency={cur} birthDate={goal.birthDate} />
         <p className="mt-2 text-xs text-ink-3">The green line is the target. &ldquo;Carrying on as planned&rdquo; starts from today&apos;s actual value and adds the planned amount each month at the expected return.</p>
       </section>
 
@@ -98,7 +158,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
           <Figure label="From what you put in" value={signedMoney(s.fromContributions, cur)} cls={tone(s.fromContributions)}
             hint={`${money(s.actualPaid, cur)} put in against ${money(s.plannedPaid, cur)} planned`} />
           <Figure label="From returns" value={signedMoney(s.fromReturns, cur)} cls={tone(s.fromReturns)}
-            hint={`against ${pct(plan.expectedReturn)} a year expected`} />
+            hint={plan.assets.length > 1 ? `against the growth you expected for each asset (${pct(plan.expectedReturn)} combined)` : `against ${pct(plan.expectedReturn)} a year expected`} />
           {need !== null && (
             <Figure label="To land on the target" value={`${money(need, cur)} / month`}
               hint={need > plan.monthlyContribution * 1.005 ? `${money(need - plan.monthlyContribution, cur)} more than planned` : need < plan.monthlyContribution * 0.995 ? `${money(plan.monthlyContribution - need, cur)} less than planned` : "as planned"}
@@ -144,25 +204,69 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">For the current year the plan column is the whole year and the actual is to date.</p>
       </section>
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <section className="card p-5 sm:p-6">
-          <h2 className="text-lg">The plan</h2>
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-ink-3">Started</dt><dd className="num">{day(plan.startDate)} with {money(plan.startValue, cur)}</dd>
-            <dt className="text-ink-3">Put in each month</dt><dd className="num">{money(plan.monthlyContribution, cur)}{plan.contributionGrowth > 0 && `, +${pct(plan.contributionGrowth)} a year`}</dd>
-            <dt className="text-ink-3">Expected return</dt><dd className="num">{pct(plan.expectedReturn)} a year</dd>
-            {plan.targetMode === "spending" && <><dt className="text-ink-3">Inflation</dt><dd className="num">{pct(plan.inflation)} a year</dd></>}
-          </dl>
-          <h3 className="mt-4 text-sm font-bold">Assets that count</h3>
-          <ul className="mt-1 divide-y divide-line text-sm">
-            {assets.map((a) => (
-              <li key={a.id} className="flex items-center gap-2 py-1.5">
-                <span className="size-2 rounded-full" style={{ background: a.color }} />
-                <Link href={`/accounts/${a.id}`} className="min-w-0 flex-1 truncate">{a.name}</Link>
-                <span className="num">{money(a.value, cur)}</span>
-              </li>
-            ))}
-          </ul>
+      <div className="space-y-5">
+        <section className="card overflow-hidden">
+          <div className="p-4 sm:px-6">
+            <h2 className="text-lg">The plan</h2>
+            <p className="num mt-1 text-sm text-ink-3">
+              Started {day(plan.startDate)} with {money(plan.startValue, cur)} · {money(plan.monthlyContribution, cur)} a month
+              {plan.contributionGrowth > 0 && `, rising ${pct(plan.contributionGrowth)} a year`} · {pct(plan.expectedReturn)} a year expected{plan.assets.length > 1 && " combined"}
+              {plan.targetMode === "spending" && ` · inflation ${pct(plan.inflation)}`}
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: `${28 + yearCols.length * 27}rem` }}>
+              <thead>
+                <tr className="eyebrow text-left">
+                  <th className="py-2 pl-4 sm:pl-6" rowSpan={2}>Asset</th>
+                  <th className="py-2 text-right" rowSpan={2}>Growth a year</th>
+                  <th className="py-2 text-right" rowSpan={2}>Put in a month</th>
+                  {yearCols.map((y) => (
+                    <th key={y.year} className="py-1.5 text-center" colSpan={3}>{y.year}{y.toDate && <span className="ml-1 font-normal normal-case">to {day(y.to, false)}</span>}</th>
+                  ))}
+                </tr>
+                <tr className="eyebrow">
+                  {yearCols.flatMap((y) => [
+                    <th key={`${y.year}-p`} className="py-1.5 text-right">Plan</th>,
+                    <th key={`${y.year}-a`} className="py-1.5 text-right">Actual</th>,
+                    <th key={`${y.year}-d`} className="py-1.5 text-right">Difference</th>,
+                  ])}
+                </tr>
+              </thead>
+              {groupBy(planRows, (r) => r.categoryId).map(({ key, items }) => (
+                <tbody key={key}>
+                  <tr className="bg-surface-2 font-bold">
+                    <td className="py-2.5 pl-4 sm:pl-6" colSpan={2}>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="size-2.5 rounded-full" style={{ background: items[0].color }} />
+                        {items[0].category}
+                      </span>
+                    </td>
+                    <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0), cur)}</td>
+                    {yearCols.flatMap((y, i) => yearCells(`${key}-${y.year}`, sumYear(items, i), cur, false))}
+                  </tr>
+                  {items.map((r) => (
+                    <tr key={r.id}>
+                      <td className="py-2.5 pl-8 font-semibold sm:pl-10"><Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link></td>
+                      <td className="num py-2.5 text-right">{pct(r.rate)}</td>
+                      <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly, cur) : "—"}</td>
+                      {r.years.flatMap((c, i) => yearCells(`${r.id}-${yearCols[i].year}`, c, cur, true))}
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
+              <tfoot>
+                <tr className="font-bold">
+                  <td className="py-3 pl-4 sm:pl-6" colSpan={2}>Total</td>
+                  <td className="num py-3 text-right">{money(plan.monthlyContribution, cur)}</td>
+                  {yearCols.flatMap((y, i) => yearCells(`total-${y.year}`, sumYear(planRows, i), cur, false))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
+            Each year compares the value at its end (today, for this year) with the plan. Under the values: the growth the plan expected over that stretch, and the return the asset actually made, with money put in or taken out set aside.
+          </p>
         </section>
 
         <section className="card p-5 sm:p-6">
@@ -200,21 +304,6 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         </section>
       </div>
 
-      {goal.notes ? (
-        <section className="card p-5 sm:p-6">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="text-lg">Notes</h2>
-            <NotesEditor notes={goal.notes} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" />
-          </div>
-          <Markdown>{goal.notes}</Markdown>
-        </section>
-      ) : (
-        <div className="flex items-center gap-3 text-sm text-ink-3">
-          <NotesEditor notes={null} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" />
-          <span>Keep notes on this goal: why, what you decided, links.</span>
-        </div>
-      )}
-
       <ConfirmDelete
         action={deleteGoal.bind(null, id)}
         title="Delete this goal?"
@@ -225,6 +314,19 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
       </ConfirmDelete>
     </div>
   );
+}
+
+type YearCell = { plan: number; actual: number; planGrowth: number | null; actualReturn: number | null };
+
+/** The three cells of one year: plan, actual and the difference, with the growth under each value where it applies. */
+function yearCells(key: string, c: YearCell, cur: string, strong: boolean) {
+  const diff = c.actual - c.plan;
+  const sub = (f: number | null) => (f === null ? null : <span className="block text-xs font-normal text-ink-3">{f >= 0 ? "+" : "−"}{Math.abs(f * 100).toFixed(1)}%</span>);
+  return [
+    <td key={`${key}-p`} className="num py-2.5 text-right text-ink-2">{money(c.plan, cur)}{sub(c.planGrowth)}</td>,
+    <td key={`${key}-a`} className={`num py-2.5 text-right ${strong ? "font-semibold" : ""}`}>{money(c.actual, cur)}{sub(c.actualReturn)}</td>,
+    <td key={`${key}-d`} className={`num py-2.5 text-right ${tone(diff)}`}>{signedMoney(diff, cur)}</td>,
+  ];
 }
 
 function Figure({ label, value, hint, cls = "" }: { label: string; value: string; hint?: string; cls?: string }) {

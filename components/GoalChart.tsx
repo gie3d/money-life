@@ -1,13 +1,17 @@
 "use client";
 
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, Area } from "recharts";
-import { axisDate, compactMoney, day, money } from "@/lib/format";
+import { axisDate, compactMoney, dayWithAge, money } from "@/lib/format";
 
 export type GoalPoint = { date: string; planned: number | null; actual: number | null; projected: number | null };
 const NAMES: Record<string, string> = { planned: "Plan", actual: "Actual", projected: "Carrying on as planned" };
 
 /** The plan (dashed), what actually happened (solid), and where carrying on as planned from today leads (dotted). */
-export default function GoalChart({ points, target, today, currency }: { points: GoalPoint[]; target: number; today: string; currency: string }) {
+export default function GoalChart({ points, target, today, currency, birthDate }: {
+  points: GoalPoint[]; target: number; today: string; currency: string;
+  /** Shown as an age next to each date on hover, for a retirement goal. */
+  birthDate?: string | null;
+}) {
   return (
     <div className="space-y-3">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
@@ -31,7 +35,7 @@ export default function GoalChart({ points, target, today, currency }: { points:
             <ReferenceLine y={target} stroke="var(--go)" strokeWidth={1.5} />
             <ReferenceLine x={today} stroke="var(--ink-3)" strokeDasharray="2 3" />
             <Tooltip
-              labelFormatter={(d) => day(String(d))}
+              labelFormatter={(d) => dayWithAge(String(d), birthDate)}
               formatter={(v, name) => [money(Number(v), currency), NAMES[String(name)] ?? String(name)]}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
             />

@@ -45,3 +45,10 @@ export const plainNumber = (n: number) => (String(n).includes("e") ? n.toFixed(8
 /** "2026-12" as "Dec 2026". */
 export const monthLabel = (month: string) =>
   new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
+/** Age in whole years on `date` for someone born on `birth` (both yyyy-mm-dd): the birthday counts from its own day. */
+export const ageOn = (birth: string, date: string) =>
+  +date.slice(0, 4) - +birth.slice(0, 4) - (date.slice(5) < birth.slice(5) ? 1 : 0);
+
+/** A date for a chart's hover, with the age on it when a birth date is known: "12 Mar 2041 · age 50". */
+export const dayWithAge = (date: string, birth?: string | null) => (birth ? `${day(date)} · age ${ageOn(birth, date)}` : day(date));

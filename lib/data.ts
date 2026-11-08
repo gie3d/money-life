@@ -222,11 +222,20 @@ export async function listGoalVersions(userId: number, goalId?: number): Promise
     goalId ? [userId, goalId] : [userId],
   );
   const n = (v: unknown) => (v === null ? null : Number(v));
+  const { rows: parts } = await pool.query(
+    `SELECT a.version_id, a.account_id, a.start_value, a.expected_return, a.monthly_contribution
+     FROM goal_version_assets a JOIN goal_versions v ON v.id = a.version_id JOIN goals g ON g.id = v.goal_id
+     WHERE g.user_id = $1 ${goalId ? "AND g.id = $2" : ""} ORDER BY a.account_id`,
+    goalId ? [userId, goalId] : [userId],
+  );
   return rows.map((r) => ({
     id: Number(r.id), goalId: Number(r.goal_id), startDate: r.start_date as string, startValue: Number(r.start_value),
     targetDate: r.target_date as string, targetMode: r.target_mode as GoalVersion["targetMode"], targetAmount: n(r.target_amount),
     monthlySpending: n(r.monthly_spending), withdrawalRate: Number(r.withdrawal_rate), expectedReturn: Number(r.expected_return),
     inflation: Number(r.inflation), monthlyContribution: Number(r.monthly_contribution), contributionGrowth: Number(r.contribution_growth),
     note: (r.note as string | null) ?? null, createdAt: r.created_at as string,
+    assets: parts.filter((a) => Number(a.version_id) === Number(r.id)).map((a) => ({
+      accountId: Number(a.account_id), startValue: Number(a.start_value), rate: Number(a.expected_return), monthly: Number(a.monthly_contribution),
+    })),
   }));
 }
