@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Link from "next/link";
 import Script from "next/script";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { getUser } from "@/lib/session";
+import pkg from "../package.json";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -43,6 +45,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <Nav userName={user?.name ?? null} />
         <main className="flex-1 w-full">{children}</main>
+        <footer className="flex items-center justify-center gap-3 px-4 py-6 text-xs text-ink-3">
+          <span className="num">Money Life v{pkg.version}</span>
+          <span aria-hidden>·</span>
+          <Link href="/releases" className="font-semibold hover:underline">Release notes</Link>
+        </footer>
       </body>
     </html>
   );

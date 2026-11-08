@@ -18,7 +18,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/.next ./.next
-COPY next.config.ts ./
+COPY next.config.ts CHANGELOG.md ./
 COPY db ./db
 COPY scripts ./scripts
 EXPOSE 3000
