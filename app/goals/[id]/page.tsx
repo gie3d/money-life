@@ -239,12 +239,13 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: `${28 + yearCols.length * 27}rem` }}>
+            <table className="w-full text-sm" style={{ minWidth: `${40 + yearCols.length * 27}rem` }}>
               <thead>
                 <tr className="eyebrow text-left">
                   <th className="py-2 pl-4 sm:pl-6" rowSpan={2}>Asset</th>
                   <th className="py-2 text-right" rowSpan={2}>Growth a year</th>
                   <th className="py-2 text-right" rowSpan={2}>Put in a month</th>
+                  <th className="py-2 text-right" rowSpan={2}>Put in a year</th>
                   {yearCols.map((y) => (
                     <th key={y.year} className="py-1.5 text-center" colSpan={3}>{y.year}{y.toDate && <span className="ml-1 font-normal normal-case">to {day(y.to, false)}</span>}</th>
                   ))}
@@ -267,6 +268,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
                       </span>
                     </td>
                     <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0), cur)}</td>
+                    <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0) * 12, cur)}</td>
                     {yearCols.flatMap((y, i) => yearCells(`${key}-${y.year}`, sumYear(items, i), cur, false))}
                   </tr>
                   {items.map((r) => (
@@ -274,6 +276,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
                       <td className="py-2.5 pl-8 font-semibold sm:pl-10"><Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link></td>
                       <td className="num py-2.5 text-right">{pct(r.rate)}</td>
                       <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly, cur) : "—"}</td>
+                      <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly * 12, cur) : "—"}</td>
                       {r.years.flatMap((c, i) => yearCells(`${r.id}-${yearCols[i].year}`, c, cur, true))}
                     </tr>
                   ))}
@@ -283,6 +286,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
                 <tr className="font-bold">
                   <td className="py-3 pl-4 sm:pl-6" colSpan={2}>Total</td>
                   <td className="num py-3 text-right">{money(plan.monthlyContribution, cur)}</td>
+                  <td className="num py-3 text-right">{money(plan.monthlyContribution * 12, cur)}</td>
                   {yearCols.flatMap((y, i) => yearCells(`total-${y.year}`, sumYear(planRows, i), cur, false))}
                 </tr>
               </tfoot>

@@ -14,7 +14,7 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "5432:5432"
+      - "5333:5432"
 
   web:
     build:
@@ -27,4 +27,4 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     ports:
-      - "3000:3000"
+      - "3333:3000"

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import AllPlansChart, { type AllPlansRow } from "@/components/AllPlansChart";
 import Breadcrumb from "@/components/Breadcrumb";
 import PlanForm from "@/components/PlanForm";
 import { listAccounts, listEntries, listPlanAssets, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
@@ -22,6 +23,22 @@ export default async function PlansPage() {
   const active = plans.filter((p) => !p.archived);
   const archivedCount = plans.length - active.length;
 
+  // All active plans together: their payments in one schedule, drawn on the funds of every account any of them uses
+  // (an account shared by two plans counts once) plus all their monthly savings.
+  const PALETTE = ["#fd6217", "#2f7dd1", "#2a9d6f", "#8a5cd0", "#d1a22f", "#d14f8b", "#4b5d73", "#17a2b8"];
+  const activeIds = new Set(active.map((p) => p.id));
+  const planOf = new Map(items.map((i) => [i.id, i.planId]));
+  const fundIds = new Set(active.flatMap((p) => funding.get(p.id) ?? []));
+  const pooled = held.filter((h) => fundIds.has(h.account.id)).reduce((s, h) => s + h.value, 0);
+  const saving = active.reduce((s, p) => s + p.monthlySaving, 0);
+  const combined = schedule(payments(items.filter((i) => activeIds.has(i.planId))), pooled, saving, today);
+  const series = active.map((p, i) => ({ key: `p${p.id}`, name: p.name, color: PALETTE[i % PALETTE.length] }));
+  const chartRows = combined.rows.map((r) => {
+    const row: AllPlansRow = { month: r.month, balance: r.balance };
+    for (const p of active) row[`p${p.id}`] = r.payments.filter((x) => planOf.get(x.itemId) === p.id).reduce((s, x) => s + x.amount, 0);
+    return row;
+  });
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans" }]} />
@@ -39,6 +56,18 @@ export default async function PlansPage() {
 
       {active.length === 0 && archivedCount > 0 && (
         <p className="text-sm text-ink-3">All your plans are archived. Open <Link href="/plans/all" className="font-semibold text-brand">All plans</Link> to bring one back.</p>
+      )}
+
+      {chartRows.length > 0 && (
+        <section className="card p-4 sm:p-6">
+          <h2 className="mb-1 text-lg">All plans together</h2>
+          <p className="mb-3 text-xs text-ink-3">
+            Each bar is what you pay that month, split by plan. The line is the funds left after paying everything
+            {pooled > 0 || saving > 0 ? <>, from {money(pooled, cur)} of chosen assets{saving > 0 && <> plus {money(saving, cur)} a month</>}</> : null}. Under the dashed zero line, the plans aren&apos;t covered yet.
+            {combined.shortFrom && <span className="font-semibold text-miss-text"> Short from {monthLabel(combined.shortFrom)}.</span>}
+          </p>
+          <AllPlansChart rows={chartRows} series={series} currency={cur} />
+        </section>
       )}
 
       {active.length > 0 && (
