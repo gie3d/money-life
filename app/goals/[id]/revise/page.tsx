@@ -18,7 +18,7 @@ export default async function ReviseGoalPage({ params }: PageProps<"/goals/[id]/
   if (!plan) notFound();
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Goals", href: "/goals" }, { label: goal.name, href: `/goals/${id}` }, { label: "Revise plan" }]} />
+      <Breadcrumb items={[{ label: "Goals", href: "/goals" }, { label: goal.name, href: `/goals/${id}` }, { label: "Revise plan" }]} />
       <div>
         <h1 className="text-3xl">Revise plan</h1>
         <p className="mt-1 text-sm text-ink-3">Saves a new version of the plan. The earlier versions are kept, so you can still see how you did against them.</p>

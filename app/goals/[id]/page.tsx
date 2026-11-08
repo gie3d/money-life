@@ -107,7 +107,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Goals", href: "/goals" }, { label: goal.name }]} />
+      <Breadcrumb items={[{ label: "Goals", href: "/goals" }, { label: goal.name }]} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">{goal.kind === "retirement" ? `Retirement at ${goal.retireAge}` : "Goal"} · {day(plan.targetDate)} · in {monthsText(Math.max(0, monthsBetween(today, plan.targetDate)))}</p>

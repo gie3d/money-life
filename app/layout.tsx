@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { getUser } from "@/lib/session";
@@ -36,7 +37,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Sets the saved theme before the page paints. Next injects it into the HTML itself, so React never renders a script tag. */}
+        <Script id="theme" strategy="beforeInteractive">{themeScript}</Script>
       </head>
       <body className="min-h-full flex flex-col">
         <Nav userName={user?.name ?? null} />

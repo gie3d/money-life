@@ -2,14 +2,17 @@ import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import CollapsibleRows from "@/components/CollapsibleRows";
 import ForecastChart from "@/components/ForecastChart";
-import PieCard from "@/components/PieCard";
-import { listAccounts, listCategories, listEntries, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
+import AllocationBars, { type AllocationRow } from "@/components/AllocationBars";
+import { listAccounts, listCategories, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
+import { goalAssets } from "@/lib/goal-data";
+import { monthsBetween, path, standing, targetValue, valuesOn } from "@/lib/goals";
+import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
 import { extendTo, netWorthSeries } from "@/lib/performance";
 import { forecast } from "@/lib/forecast";
 import { payments } from "@/lib/plan";
-import { accountEntries, holdings, slices } from "@/lib/portfolio";
+import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
@@ -21,8 +24,7 @@ export default async function Overview() {
     listAccounts(user.id), listEntries(user.id), listCategories(user.id), listTrades(user.id), listPrices(user.id),
     listPlans(user.id), listPlanItems(user.id),
   ]);
-  const categoryOrder = categories.map((c) => ({ id: String(c.id), label: c.name }));
-  const categoryColor = new Map(categories.map((c) => [String(c.id), c.color]));
+  const [goals, goalVersions, { listsOf: goalLists }] = await Promise.all([listGoals(user.id), listGoalVersions(user.id), goalAssets(user.id)]);
   const rows = holdings(accounts, entries, trades, prices);
 
   if (rows.length === 0) {
@@ -64,15 +66,40 @@ export default async function Overview() {
     })
     .filter((g) => g.rows.length > 0);
 
-  const paint = (list: ReturnType<typeof slices>, order: readonly { id: string }[]) =>
-    list.map((s) => ({ ...s, color: colorFor(s.id, order) }));
-  const byCategory = (metric: (h: (typeof rows)[number]) => number) =>
-    slices(rows, (h) => String(h.account.categoryId), metric, categoryOrder).map((sl) => ({ ...sl, color: categoryColor.get(sl.id) ?? "#8e8e93" }));
+  // Allocation: value per category or liquidity group, with what the investments in it cost.
+  const allocation = (members: typeof rows, id: string, label: string, color: string): AllocationRow => {
+    const inv = members.filter((h) => h.investment);
+    return { id, label, color, value: members.reduce((s, h) => s + h.value, 0), cost: inv.length > 0 ? inv.reduce((s, h) => s + h.cost, 0) : null };
+  };
+  const byCategory = groups.map((g) => allocation(g.rows, String(g.category.id), g.category.name, g.category.color));
+  const byLiquidity = LIQUIDITY
+    .map((l) => allocation(rows.filter((h) => h.account.liquidity === l.id), l.id, l.label, colorFor(l.id, LIQUIDITY)))
+    .filter((r) => r.value !== 0);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Goals, three years out: where each plan should be by then (or at its own date, if sooner), where carrying on
+  // from today leads by then, and how each stands against its plan today.
+  const goalCards = goals.flatMap((g) => {
+    const plan = goalVersions.filter((v) => v.goalId === g.id).at(-1);
+    if (!plan) return [];
+    const glists = goalLists(g.accountIds);
+    const s = standing(plan, glists, today);
+    const nowBy = plan.assets.length > 0 ? valuesOn(glists, today) : s.actual;
+    const n = monthsBetween(plan.startDate, plan.targetDate);
+    const final = addMonths(today, 36) >= plan.targetDate;
+    const k = final ? n : Math.min(n, monthsBetween(plan.startDate, addMonths(today, 36)));
+    return [{
+      goal: g, plan, s, final,
+      date: final ? plan.targetDate : addMonths(today, 36),
+      milestone: final ? targetValue(plan) : path(plan, 0, undefined, k).at(-1)!.value,
+      onTrack: path(plan, s.k, nowBy, Math.max(k, s.k)).at(-1)!.value,
+    }];
+  });
 
   // Where the total value is heading: the last 12 months' average change carried on, less plan payments.
   // Plans are only subtracted here, in the forecast; nothing is ever taken out of an asset.
   const lists = rows.map((h) => accountEntries(h.account, entries, trades, prices));
-  const today = new Date().toISOString().slice(0, 10);
   const planName = new Map(plans.map((p) => [p.id, p.name]));
   const itemPlan = new Map(planItems.map((i) => [i.id, planName.get(i.planId) ?? ""]));
   // Archived plans are put aside, so their costs are left out.
@@ -98,6 +125,57 @@ export default async function Overview() {
         )}
         <Link href="/performance" className="mt-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-sm font-semibold hover:bg-white/30">See performance →</Link>
       </section>
+
+      {goalCards.length > 0 ? (
+        <section className="card p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg">Goals <span className="text-ink-3">— the next 3 years</span></h2>
+              <p className="text-xs text-ink-3">Where each plan should be by {day(addMonths(today, 36))}, and whether you&apos;re on track to get there.</p>
+            </div>
+            <Link href="/goals" className="text-sm font-semibold text-brand">All goals →</Link>
+          </div>
+          <ul className="divide-y divide-line">
+            {goalCards.map(({ goal, s, final, date, milestone, onTrack }) => {
+              const share = milestone > 0 ? Math.min(1, s.actual / milestone) : 0;
+              const ok = onTrack >= milestone;
+              return (
+                <li key={goal.id} className="py-3 first:pt-0 last:pb-0">
+                  <Link href={`/goals/${goal.id}`} className="block space-y-2">
+                    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+                      <div>
+                        <p className="font-semibold">{goal.name}</p>
+                        <p className={`text-sm font-semibold ${tone(s.gap)}`}>{s.gap >= 0 ? "Ahead of plan" : "Behind plan"} {signedMoney(s.gap, cur)} today</p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${final ? "bg-go-soft text-go-text" : "bg-sky-soft text-sky"}`}>
+                          {final ? "Final target" : "3-year target"} · {day(date)}
+                        </span>
+                        <p className="num mt-1 text-2xl font-extrabold">{money(milestone, cur)}</p>
+                      </div>
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${Math.round(share * 100)}% of the way`}>
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${share * 100}%` }} />
+                    </div>
+                    <p className="num flex flex-wrap gap-x-4 text-xs text-ink-3">
+                      <span>Now <span className="font-semibold text-ink">{money(s.actual, cur)}</span> · {(share * 100).toFixed(1)}% of the way</span>
+                      <span>On track for <span className={`font-semibold ${ok ? "text-go-text" : "text-miss-text"}`}>{money(onTrack, cur)}</span> by {day(date)}{ok ? " ✓" : ` (${money(milestone - onTrack, cur)} short)`}</span>
+                    </p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+        <Link href="/goals/new" className="card flex items-center justify-between gap-3 p-5 hover:bg-surface-2 sm:p-6">
+          <span>
+            <span className="block text-lg font-bold">Set a goal</span>
+            <span className="text-sm text-ink-3">Retirement, a child&apos;s education, a house: see if you&apos;re on track.</span>
+          </span>
+          <span className="text-brand">→</span>
+        </Link>
+      )}
 
       <section className="card p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-3">
@@ -135,16 +213,7 @@ export default async function Overview() {
         </p>
       </section>
 
-      <div className="grid gap-5 md:grid-cols-3">
-        <PieCard title="Category by cost" subtitle="Money put in; cash and saving at their balance" slices={byCategory((h) => h.cost)} currency={cur} />
-        <PieCard title="Category by value" subtitle="What it is worth now" slices={byCategory((h) => h.value)} currency={cur} />
-        <PieCard
-          title="Liquidity"
-          subtitle="How fast it turns into cash"
-          slices={paint(slices(rows, (h) => h.account.liquidity, (h) => h.value, LIQUIDITY), LIQUIDITY)}
-          currency={cur}
-        />
-      </div>
+      <AllocationBars byCategory={byCategory} byLiquidity={byLiquidity} currency={cur} />
 
       <section className="card overflow-hidden">
         <div className="flex flex-wrap items-baseline gap-x-3 p-4 sm:px-6">
