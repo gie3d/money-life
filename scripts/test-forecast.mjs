@@ -24,4 +24,12 @@ f = forecast([pt("2026-11-01", 500)], "2026-11-08", []);
 near(f.monthly, 0); near(f.end.trend, 500); assert.equal(f.points[0].date, "2026-11-08");
 f = forecast([pt("2026-08-08", 1000), pt("2026-11-08", 1300)], "2026-11-08", []);
 assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
+// Twelve back and twelve ahead: history from the end of Nov last year, forecast a year on, payments within the year.
+{
+  const f12 = forecast(series, "2026-11-08", [pay("2027-06-01", 999), pay("2027-12-01", 1)], 12);
+  assert.equal(f12.points[0].date, "2025-11-30");
+  assert.equal(f12.points.at(-1).date, "2027-11-08");
+  assert.equal(f12.points.length, 12 + 1 + 12);
+  near(f12.end.trend, 2_400_000 + 12 * 100_000); near(f12.end.afterPlans, 2_400_000 + 12 * 100_000 - 999);
+}
 console.log("forecast ok");

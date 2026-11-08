@@ -16,7 +16,7 @@ export default function ForecastChart({ points, today, currency, withPlans }: { 
         <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-sky" />Trend</li>
         {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-miss" />After plan costs</li>}
       </ul>
-      <div className="h-64 w-full" role="img" aria-label="Total value over the last months and forecast for the next six">
+      <div className="h-64 w-full" role="img" aria-label="Total value over the last twelve months and forecast for the next twelve">
         <ResponsiveContainer>
           <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>

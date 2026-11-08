@@ -7,7 +7,7 @@ import { listAccounts, listCategories, listEntries, listGoals, listGoalVersions,
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valuesOn } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
-import { day, money, pct, signedMoney, tone } from "@/lib/format";
+import { compactMoney, day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
 import { extendTo, netWorthSeries } from "@/lib/performance";
 import { forecast } from "@/lib/forecast";
@@ -89,9 +89,15 @@ export default async function Overview() {
     const n = monthsBetween(plan.startDate, plan.targetDate);
     const final = addMonths(today, 36) >= plan.targetDate;
     const k = final ? n : Math.min(n, monthsBetween(plan.startDate, addMonths(today, 36)));
+    const date = final ? plan.targetDate : addMonths(today, 36);
+    // The plan's value at the end of this year and the next two, as marks on the bar (only those before its end).
+    const thisYear = +today.slice(0, 4);
+    const marks = [thisYear, thisYear + 1, thisYear + 2]
+      .map((y) => ({ year: y, end: `${y}-12-31` }))
+      .filter((m) => m.end < date && m.end >= plan.startDate)
+      .map((m) => ({ year: m.year, value: path(plan, 0, undefined, Math.min(n, monthsBetween(plan.startDate, m.end))).at(-1)!.value }));
     return [{
-      goal: g, plan, s, final,
-      date: final ? plan.targetDate : addMonths(today, 36),
+      goal: g, plan, s, final, date, marks,
       milestone: final ? targetValue(plan) : path(plan, 0, undefined, k).at(-1)!.value,
       onTrack: path(plan, s.k, nowBy, Math.max(k, s.k)).at(-1)!.value,
     }];
@@ -104,7 +110,8 @@ export default async function Overview() {
   const itemPlan = new Map(planItems.map((i) => [i.id, planName.get(i.planId) ?? ""]));
   // Archived plans are put aside, so their costs are left out.
   const activePlans = new Set(plans.filter((p) => !p.archived).map((p) => p.id));
-  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems.filter((i) => activePlans.has(i.planId))));
+  // Twelve months back as recorded, twelve ahead on the trend.
+  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems.filter((i) => activePlans.has(i.planId))), 12);
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
 
   return (
@@ -136,7 +143,7 @@ export default async function Overview() {
             <Link href="/goals" className="text-sm font-semibold text-brand">All goals →</Link>
           </div>
           <ul className="divide-y divide-line">
-            {goalCards.map(({ goal, s, final, date, milestone, onTrack }) => {
+            {goalCards.map(({ goal, s, final, date, milestone, onTrack, marks }) => {
               const share = milestone > 0 ? Math.min(1, s.actual / milestone) : 0;
               const ok = onTrack >= milestone;
               return (
@@ -154,8 +161,29 @@ export default async function Overview() {
                         <p className="num mt-1 text-2xl font-extrabold">{money(milestone, cur)}</p>
                       </div>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${Math.round(share * 100)}% of the way`}>
-                      <div className="h-full rounded-full bg-brand" style={{ width: `${share * 100}%` }} />
+                    <div
+                      className={`relative ${marks.length > 0 ? "pb-7" : ""}`}
+                      role="img"
+                      aria-label={`${Math.round(share * 100)}% of the way${marks.map((m) => `; plan for end of ${m.year}: ${money(m.value, cur)}`).join("")}`}
+                    >
+                      <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
+                        <div className="h-full rounded-full bg-brand" style={{ width: `${share * 100}%` }} />
+                      </div>
+                      {marks.map((m) => {
+                        const at = milestone > 0 ? Math.min(100, (m.value / milestone) * 100) : 0;
+                        const reached = s.actual >= m.value;
+                        return (
+                          <div key={m.year} className="absolute top-0" style={{ left: `${at}%` }} aria-hidden>
+                            <span className={`absolute -top-1 block h-4.5 w-0.5 -translate-x-1/2 rounded-full ${reached ? "bg-go" : "bg-ink-2"}`} />
+                            <span
+                              className={`num absolute top-4 whitespace-nowrap text-[11px] leading-tight ${reached ? "text-go-text" : "text-ink-3"} ${at > 85 ? "-translate-x-full text-right" : at < 15 ? "" : "-translate-x-1/2 text-center"}`}
+                            >
+                              <span className="block font-semibold">{m.year}</span>
+                              {compactMoney(m.value, cur)}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                     <p className="num flex flex-wrap gap-x-4 text-xs text-ink-3">
                       <span>Now <span className="font-semibold text-ink">{money(s.actual, cur)}</span> · {(share * 100).toFixed(1)}% of the way</span>
@@ -180,7 +208,7 @@ export default async function Overview() {
       <section className="card p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-3">
           <div className="mr-auto">
-            <h2 className="text-lg">Next 6 months</h2>
+            <h2 className="text-lg">Next 12 months</h2>
             <p className="text-xs text-ink-3">Forecast to {day(ahead.end.date)}</p>
           </div>
           <Stat
@@ -195,7 +223,7 @@ export default async function Overview() {
         <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={planDue > 0} />
         {ahead.payments.length > 0 && (
           <details className="mt-3 text-sm">
-            <summary className="cursor-pointer font-semibold text-ink-2">Plan payments in the next 6 months ({ahead.payments.length})</summary>
+            <summary className="cursor-pointer font-semibold text-ink-2">Plan payments in the next 12 months ({ahead.payments.length})</summary>
             <ul className="mt-2 divide-y divide-line">
               {ahead.payments.map((p, i) => (
                 <li key={`${p.itemId}-${p.date}-${i}`} className="flex items-center gap-3 py-2">

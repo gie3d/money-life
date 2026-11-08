@@ -42,7 +42,7 @@ function valueOn(series: Point[], date: string): number {
  * of history there is no trend to go on, so it stays flat. Plan payments due from today on are then taken
  * off it as they fall. This is a forecast only: nothing is taken out of any asset.
  *
- * `series` is the total value over time, ending today. The history shown is the last `months` months, one
+ * `series` is the total value over time, ending today. The history shown is the last `months` months too, one
  * point at the end of each month, then today.
  */
 export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12): Forecast {
