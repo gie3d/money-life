@@ -146,6 +146,13 @@ h1, h2, h3, h4 {
   color: var(--ink-3);
 }
 
+/* Every table has a border on every row and column. Cells get side padding so text clears the lines;
+   a cell's own padding classes (pl-4 on the first column, say) still win. */
+@layer base {
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid var(--line); padding-left: 0.75rem; padding-right: 0.75rem; }
+}
+
 @layer components {
   .card {
     background: var(--surface);

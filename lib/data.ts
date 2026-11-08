@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
-import { applyTotals } from "./investment";
-import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade } from "./types";
+import { deriveTrades } from "./investment";
+import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -72,12 +72,35 @@ const toTrade = (r: Record<string, unknown>): Trade => ({
 });
 
 /**
- * Trades of the given accounts, oldest first, including the ones worked out from "Total" entries.
- * Everything that values a holding reads this, so totals count everywhere.
+ * Trades of the given accounts, oldest first, including the ones worked out from "Total" entries and transfers.
+ * Everything that values a holding reads this, so totals and transfers count everywhere. A transfer's cost comes
+ * from the sending asset's history, so the user's trades are always worked out across all assets, then filtered.
  */
 export async function listTrades(userId: number, accountId?: number): Promise<Trade[]> {
-  const [trades, totals] = await Promise.all([listEnteredTrades(userId, accountId), listTotals(userId, accountId)]);
-  return applyTotals(trades, totals);
+  const p = await listTradeParts(userId);
+  const all = deriveTrades(p.trades, p.totals, p.transfers, p.prices);
+  return accountId ? all.filter((t) => t.accountId === accountId) : all;
+}
+
+/** Everything trades are worked out from, for all of the user's assets. */
+export async function listTradeParts(userId: number) {
+  const [trades, totals, transfers, prices] = await Promise.all([
+    listEnteredTrades(userId), listTotals(userId), listTransfers(userId), listPrices(userId),
+  ]);
+  return { trades, totals, transfers, prices };
+}
+
+export async function listTransfers(userId: number): Promise<Transfer[]> {
+  const { rows } = await pool.query(
+    `SELECT x.id, x.from_account_id, x.to_account_id, x.date::text AS date, x.units, x.fee, x.note
+     FROM transfers x JOIN accounts a ON a.id = x.from_account_id
+     WHERE a.user_id = $1 ORDER BY x.date, x.id`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), fromAccountId: Number(r.from_account_id), toAccountId: Number(r.to_account_id), date: r.date as string,
+    units: Number(r.units), fee: Number(r.fee), note: (r.note as string | null) ?? null,
+  }));
 }
 
 export async function listTotals(userId: number, accountId?: number): Promise<Total[]> {
@@ -114,15 +137,17 @@ export async function listPrices(userId: number, accountId?: number): Promise<Pr
   return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: Number(r.price) }));
 }
 
-const toPlan = (r: Record<string, unknown>): Plan => ({ id: Number(r.id), name: r.name as string, monthlySaving: Number(r.monthly_saving) });
+const toPlan = (r: Record<string, unknown>): Plan => ({
+  id: Number(r.id), name: r.name as string, monthlySaving: Number(r.monthly_saving), notes: (r.notes as string | null) ?? null,
+});
 
 export async function listPlans(userId: number): Promise<Plan[]> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
+  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
   return rows.map(toPlan);
 }
 
 export async function getPlan(userId: number, id: number): Promise<Plan | null> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
+  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
   return rows[0] ? toPlan(rows[0]) : null;
 }
 

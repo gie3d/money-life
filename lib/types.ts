@@ -44,7 +44,15 @@ export type Trade = {
    * buy (the rise in cost), received for a sale (the units sold at `price`).
    */
   total?: { id: number; units: number; cost: number; cash: number };
+  /**
+   * Set when this trade is one side of a transfer between two assets: `units` moved (plus `fee` units lost on
+   * the way, taken from the sender) with `cost` of their cost; `feeCost` is the cost of the fee units.
+   */
+  transfer?: { id: number; direction: "in" | "out"; otherAccountId: number; units: number; fee: number; cost: number; feeCost: number };
 };
+
+/** Units moved from one asset to another on a date, with an optional fee in units taken from the sender. */
+export type Transfer = { id: number; fromAccountId: number; toAccountId: number; date: string; units: number; fee: number; note: string | null };
 
 /** A "Total" entry: at the end of `date` the holding was `units` units that had cost `cost`, at `price` a unit. */
 export type Total = { id: number; accountId: number; date: string; units: number; cost: number; price: number; note: string | null };
@@ -104,7 +112,13 @@ export const labelOf = (list: readonly { id: string; label: string }[], id: stri
 
 export const CURRENCIES = ["THB", "USD", "EUR", "GBP", "JPY", "SGD", "AUD", "CAD"] as const;
 
-export type Plan = { id: number; name: string; monthlySaving: number };
+export type Plan = {
+  id: number;
+  name: string;
+  monthlySaving: number;
+  /** Free text about the plan, in Markdown. */
+  notes: string | null;
+};
 
 export const FREQUENCIES = [
   { id: "once", label: "One time" },

@@ -43,6 +43,16 @@ export async function updatePlan(planId: number, _: FormState, form: FormData): 
   revalidatePath("/", "layout");
 }
 
+/** Saves the free-text notes of a plan; empty clears them. */
+export async function updatePlanNotes(planId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
+  if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
+  const { rowCount } = await pool.query("UPDATE plans SET notes = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, notes || null]);
+  if (!rowCount) return { error: "That plan no longer exists." };
+  revalidatePath(`/plans/${planId}`);
+}
+
 export async function deletePlan(planId: number) {
   const user = await requireUser();
   await pool.query("DELETE FROM plans WHERE id = $1 AND user_id = $2", [planId, user.id]);

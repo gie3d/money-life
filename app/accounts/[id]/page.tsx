@@ -12,8 +12,8 @@ import NotesEditor from "@/components/NotesEditor";
 import ProfitChart from "@/components/ProfitChart";
 import PriceForm from "@/components/PriceForm";
 import TradeForm from "@/components/TradeForm";
-import { deleteAccount, deleteEntry, deletePrice, setArchived } from "@/app/actions/money";
-import { getAccount, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
+import { deleteAccount, deleteEntry, deletePrice, setArchived, updateNotes } from "@/app/actions/money";
+import { getAccount, listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
 import { priceHistory, tradeCash } from "@/lib/investment";
 import NetWorthChart from "@/components/NetWorthChart";
@@ -36,12 +36,18 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
   const cur = user.currency;
   const investment = isInvestment(account);
-  const [entries, trades, prices, categories] = await Promise.all([
+  const [entries, trades, prices, categories, allAccounts] = await Promise.all([
     investment ? [] : listEntries(user.id, account.id),
     investment ? listTrades(user.id, account.id) : [],
     investment ? listPrices(user.id, account.id) : [],
     listCategories(user.id),
+    listAccounts(user.id, true),
   ]);
+  // Other investments, to send units to (archived ones only to name past transfers).
+  const transferTargets = allAccounts
+    .filter((a) => a.id !== account.id && isInvestment(a))
+    .map((a) => ({ id: a.id, name: a.name, archived: a.archived }));
+  const nameOf = (id: number) => allAccounts.find((a) => a.id === id)?.name ?? "a deleted asset";
   const h = holdings([account], entries, trades, prices)[0];
   const history = priceHistory(trades, prices);
   const dated = [accountEntries(account, entries, trades, prices)];
@@ -73,13 +79,13 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         <section className="card p-5 sm:p-6">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-lg">Notes</h2>
-            <NotesEditor accountId={account.id} notes={account.notes} />
+            <NotesEditor notes={account.notes} save={updateNotes.bind(null, account.id)} placeholder="Where it's held, account numbers, why you bought it…" />
           </div>
           <Markdown>{account.notes}</Markdown>
         </section>
       ) : (
         <div className="flex items-center gap-3 text-sm text-ink-3">
-          <NotesEditor accountId={account.id} notes={null} />
+          <NotesEditor notes={null} save={updateNotes.bind(null, account.id)} placeholder="Where it's held, account numbers, why you bought it…" />
           <span>Keep details about this asset here: where it&apos;s held, account numbers, why you bought it.</span>
         </div>
       )}
@@ -138,7 +144,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
       {investment ? (
         <div className="grid gap-5 md:grid-cols-2">
-          <TradeForm accountId={account.id} currency={cur} trades={trades} />
+          <TradeForm accountId={account.id} currency={cur} trades={trades} transferTargets={transferTargets} />
           <PriceForm accountId={account.id} currency={cur} />
         </div>
       ) : (
@@ -173,15 +179,29 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         <section className="card divide-y divide-line">
           <h2 className="p-4 text-lg sm:px-6">Trades</h2>
           {[...trades].reverse().map((t) => {
-            const kind = t.total ? "total" : t.side;
+            const kind = t.transfer ? (t.transfer.direction === "in" ? "in" : "out") : t.total ? "total" : t.side;
             return (
               <div key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
-                <span className={`w-12 text-xs font-bold uppercase ${t.total ? "text-ink-2" : t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>{kind}</span>
+                <span className={`w-12 text-xs font-bold uppercase ${t.total || t.transfer ? "text-ink-2" : t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>
+                  {kind}
+                  {t.transfer && <span className="block text-[10px] font-semibold normal-case text-ink-3">transfer</span>}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{day(t.date)}</p>
                   {t.note && <p className="truncate text-xs text-ink-3">{t.note}</p>}
                 </div>
-                {t.total ? (
+                {t.transfer ? (
+                  <div className="min-w-0 text-right">
+                    <p className="num font-semibold">
+                      {units(t.transfer.units)} units {t.transfer.direction === "in" ? "← " : "→ "}
+                      <Link href={`/accounts/${t.transfer.otherAccountId}`} className="underline decoration-line underline-offset-2">{nameOf(t.transfer.otherAccountId)}</Link>
+                    </p>
+                    <p className="num text-xs text-ink-3">
+                      {money(t.transfer.cost, cur)} of cost moved
+                      {t.transfer.fee > 0 && t.transfer.direction === "out" && ` · fee ${units(t.transfer.fee)} units`}
+                    </p>
+                  </div>
+                ) : t.total ? (
                   <div className="text-right">
                     <p className="num font-semibold">{units(t.total.units)} units · cost {money(t.total.cost, cur)}</p>
                     <p className="num text-xs text-ink-3">
@@ -197,8 +217,8 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
                     <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
                   </div>
                 )}
-                <EditTradeButton trade={t} currency={cur} label={`Edit ${kind} on ${day(t.date)}`} />
-                <DeleteTradeButton accountId={account.id} tradeId={t.id} totalId={t.total?.id} label={`Delete ${kind} on ${day(t.date)}`} />
+                <EditTradeButton trade={t} currency={cur} label={`Edit ${t.transfer ? "transfer" : kind} on ${day(t.date)}`} transferTargets={transferTargets} />
+                <DeleteTradeButton accountId={account.id} tradeId={t.id} totalId={t.total?.id} transferId={t.transfer?.id} label={`Delete ${t.transfer ? "transfer" : kind} on ${day(t.date)}`} />
               </div>
             );
           })}
@@ -212,7 +232,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
             <div key={p.date} className="flex items-center gap-3 px-4 py-3 sm:px-6">
               <div className="flex-1">
                 <p className="font-semibold">{day(p.date)}</p>
-                <p className="text-xs text-ink-3">{p.source === "trade" ? "From a trade" : "Entered by hand"}</p>
+                <p className="text-xs text-ink-3">{p.source === "trade" ? "From a trade" : p.source === "transfer" ? "From a transfer" : "Entered by hand"}</p>
               </div>
               <p className="num font-semibold">{unitPrice(p.price, cur)}</p>
               <EditPriceButton accountId={account.id} row={p} currency={cur} />

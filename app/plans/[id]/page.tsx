@@ -6,7 +6,9 @@ import FundingForm from "@/components/FundingForm";
 import PlanChart from "@/components/PlanChart";
 import PlanItemForm from "@/components/PlanItemForm";
 import PlanSettings from "@/components/PlanSettings";
-import { deletePlan, deletePlanItem } from "@/app/actions/plans";
+import Markdown from "@/components/Markdown";
+import NotesEditor from "@/components/NotesEditor";
+import { deletePlan, deletePlanItem, updatePlanNotes } from "@/app/actions/plans";
 import { getPlan, listAccounts, listEntries, listPlanAssets, listPlanItems, listPrices, listTrades } from "@/lib/data";
 import { day, money, monthLabel, tone } from "@/lib/format";
 import { payments, schedule } from "@/lib/plan";
@@ -51,6 +53,21 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans", href: "/plans" }, { label: plan.name }]} />
       <h1 className="text-3xl">{plan.name}</h1>
+
+      {plan.notes ? (
+        <section className="card p-5 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-lg">Notes</h2>
+            <NotesEditor notes={plan.notes} save={updatePlanNotes.bind(null, plan.id)} placeholder="What it's for, quotes, links, decisions…" />
+          </div>
+          <Markdown>{plan.notes}</Markdown>
+        </section>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-ink-3">
+          <NotesEditor notes={null} save={updatePlanNotes.bind(null, plan.id)} placeholder="What it's for, quotes, links, decisions…" />
+          <span>Keep details about this plan here: what it&apos;s for, quotes, links, decisions.</span>
+        </div>
+      )}
 
       <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4 sm:p-6">
         <Figure label="Total cost" value={money(s.total, cur)} />

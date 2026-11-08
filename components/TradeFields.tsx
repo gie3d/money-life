@@ -17,20 +17,29 @@ type Field = "units" | "price" | "total";
  * Units, price per unit and total (units x price, before the fee) are tied together: fill in any two
  * and the third is worked out. Only units and price are sent; the total is for convenience.
  */
-export default function TradeFields({ currency, trade, heldOn }: {
+export default function TradeFields({ currency, trade, heldOn, transferTargets = [] }: {
   currency: string;
-  /** The trade being edited. One worked out from a total is edited as that total. */
+  /** The trade being edited. One worked out from a total or a transfer is edited as that total or transfer. */
   trade?: Trade;
   /** Units held and their cost at the end of a day, before any total on it. Given when recording a new trade, it adds the "Total" choice. */
   heldOn?: (date: string) => { quantity: number; cost: number };
+  /** The user's other investments, to send units to. Some given, on a new trade, adds the "Transfer" choice. */
+  transferTargets?: { id: number; name: string; archived: boolean }[];
 }) {
-  const [side, setSide] = useState<"buy" | "sell" | "total">(trade?.total ? "total" : (trade?.side ?? "buy"));
+  type Side = "buy" | "sell" | "total" | "transfer";
+  const [side, setSide] = useState<Side>(trade?.transfer ? "transfer" : trade?.total ? "total" : (trade?.side ?? "buy"));
+  const [transfer, setTransfer] = useState({
+    units: trade?.transfer ? plainNumber(trade.transfer.units) : "",
+    fee: trade?.transfer && trade.transfer.fee > 0 ? plainNumber(trade.transfer.fee) : "",
+  });
+  const nameOf = (id: number) => transferTargets.find((a) => a.id === id)?.name ?? "another asset";
   const [date, setDate] = useState(trade?.date ?? "");
   const [held, setHeld] = useState({
     units: trade?.total ? plainNumber(trade.total.units) : "",
     cost: trade?.total ? fmt(trade.total.cost, 2) : "",
   });
-  const choices = trade?.total ? (["total"] as const) : trade ? (["buy", "sell"] as const) : (["buy", "sell", "total"] as const);
+  const choices: readonly Side[] = trade?.transfer ? ["transfer"] : trade?.total ? ["total"] : trade ? ["buy", "sell"]
+    : transferTargets.some((a) => !a.archived) ? ["buy", "sell", "total", "transfer"] : ["buy", "sell", "total"];
   const [values, setValues] = useState<Record<Field, string>>({
     units: trade ? plainNumber(trade.quantity) : "",
     price: trade ? plainNumber(trade.price) : "",
@@ -61,7 +70,7 @@ export default function TradeFields({ currency, trade, heldOn }: {
   return (
     <>
       <fieldset className="flex gap-2">
-        <legend className="sr-only">Buy, sell, or set the total</legend>
+        <legend className="sr-only">Buy, sell, set the total, or transfer</legend>
         {choices.map((s) => (
           <label key={s} className="cursor-pointer">
             <input type="radio" name="side" value={s} checked={side === s} onChange={() => setSide(s)} className="peer sr-only" />
@@ -76,7 +85,41 @@ export default function TradeFields({ currency, trade, heldOn }: {
           <span className="eyebrow">Date</span>
           <DatePicker name="date" label="Date" defaultValue={trade?.date} onChange={setDate} />
         </div>
-        {side === "total" ? (
+        {side === "transfer" ? (
+          <>
+            {trade?.transfer?.direction === "in" ? (
+              <div className="block space-y-1.5">
+                <span className="eyebrow">From</span>
+                <p className="field text-ink-2">{nameOf(trade.transfer.otherAccountId)}</p>
+                <input type="hidden" name="to" value={trade.accountId} />
+              </div>
+            ) : (
+              <label className="block space-y-1.5">
+                <span className="eyebrow">Send to</span>
+                <select name="to" required defaultValue={trade?.transfer?.otherAccountId ?? ""} className="field">
+                  <option value="" disabled>Pick an asset</option>
+                  {transferTargets.filter((a) => !a.archived || a.id === trade?.transfer?.otherAccountId).map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="block space-y-1.5">
+              <span className="eyebrow">Units arriving</span>
+              <NumberInput name="units" required placeholder="0" value={transfer.units} onValueChange={(v) => setTransfer({ ...transfer, units: v })} className="field" />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="eyebrow">Network fee (units, optional)</span>
+              <NumberInput name="fee" placeholder="0" value={transfer.fee} onValueChange={(v) => setTransfer({ ...transfer, fee: v })} className="field" />
+            </label>
+            {heldOn && (
+              <TransferPreview before={date ? heldOn(date) : { quantity: 0, cost: 0 }} units={parse(transfer.units)} fee={transfer.fee === "" ? 0 : parse(transfer.fee)} currency={currency} />
+            )}
+            <p className="-mt-1 text-xs text-ink-3 sm:col-span-2">
+              The units move with their share of the cost, at this asset&apos;s average cost, so no profit is taken and no money goes in or out. A fee in units is taken from this asset on top and counts as a small loss.
+            </p>
+          </>
+        ) : side === "total" ? (
           <>
             <label className="block space-y-1.5">
               <span className="eyebrow">Units held</span>
@@ -114,7 +157,7 @@ export default function TradeFields({ currency, trade, heldOn }: {
             <p className="-mt-1 text-xs text-ink-3 sm:col-span-2">Fill in any two of units, total and price per unit, and the third is worked out. The total is before the fee.</p>
           </>
         )}
-        {side !== "total" && (
+        {(side === "buy" || side === "sell") && (
           <label className="block space-y-1.5">
             <span className="eyebrow">Trading fee ({currency})</span>
             <NumberInput name="fee" placeholder="0" defaultValue={trade && trade.fee > 0 ? plainNumber(trade.fee) : ""} className="field" />
@@ -169,6 +212,32 @@ function TotalPreview({ before, units, cost, price, currency }: {
         <p className="font-semibold">No change in units; the cost goes from {money(before.cost, currency)} to {money(cost, currency)}.</p>
       ) : (
         <p className="font-semibold">No change. Only the price is recorded.</p>
+      )}
+    </div>
+  );
+}
+
+/** What a transfer will move: the units sent (and the fee) out of what is held, with their share of the cost. */
+function TransferPreview({ before, units, fee, currency }: { before: { quantity: number; cost: number }; units: number; fee: number; currency: string }) {
+  const avg = before.quantity > 0 ? before.cost / before.quantity : 0;
+  const ready = units > 0 && fee >= 0;
+  const out = ready ? units + fee : 0;
+  return (
+    <div className="space-y-1 rounded-xl bg-surface-2 px-4 py-3 text-sm sm:col-span-2">
+      <p className="text-ink-3">
+        Before this you hold <span className="num font-semibold text-ink">{fmtUnits(before.quantity)}</span> units at an average cost of{" "}
+        <span className="num font-semibold text-ink">{unitPrice(avg, currency)}</span>.
+      </p>
+      {!ready ? (
+        <p className="text-ink-3">Pick where the units go and how many arrive to see what moves.</p>
+      ) : out > before.quantity + 1e-9 ? (
+        <p className="font-semibold text-miss-text">That is more than you hold on this date{fee > 0 ? ", the fee included" : ""}.</p>
+      ) : (
+        <p className="font-semibold">
+          Send <span className="num">{fmtUnits(units)}</span> units with <span className="num">{money(avg * units, currency)}</span> of cost
+          {fee > 0 && <span className="font-normal text-ink-3">, plus {fmtUnits(fee)} units of fee ({money(avg * fee, currency)} lost)</span>}
+          . <span className="font-normal text-ink-3">{fmtUnits(before.quantity - out)} units left here.</span>
+        </p>
       )}
     </div>
   );

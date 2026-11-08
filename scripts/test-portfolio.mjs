@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-portfolio.mjs
 import assert from "node:assert/strict";
-import { applyTotals, investmentEntries, latestPrice, priceHistory, replay, tradeCash } from "../lib/investment.ts";
+import { deriveTrades, investmentEntries, latestPrice, priceHistory, replay, tradeCash } from "../lib/investment.ts";
 import { holdings, slices } from "../lib/portfolio.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`);
@@ -58,7 +58,7 @@ console.log("ok");
   const sides = (ts) => ts.map((t) => `${t.side} ${Math.round(t.quantity * 1e8) / 1e8}`);
 
   // Entered out of order: 1 Jan 0.25 BTC, 1 Mar 0.50, then 1 Feb 0.70. Every date keeps its units and cost.
-  let ts = applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000), tot(3, "2025-02-01", 0.7, 700_000)]);
+  let ts = deriveTrades([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000), tot(3, "2025-02-01", 0.7, 700_000)]);
   assert.deepEqual(sides(ts), ["buy 0.25", "buy 0.45", "sell 0.2"]);
   near(at(ts, "2025-01-01").quantity, 0.25); near(at(ts, "2025-02-01").quantity, 0.7); near(at(ts, "2025-03-01").quantity, 0.5);
   near(at(ts, "2025-01-01").cost, 250_000); near(at(ts, "2025-02-01").cost, 700_000); near(at(ts, "2025-03-01").cost, 480_000);
@@ -68,26 +68,59 @@ console.log("ok");
   near(tradeCash(ts[1]), 450_000); near(tradeCash(ts[2]), 200_000); near(at(ts, "2025-03-01").realized, 200_000 - 220_000);
 
   // Deleting the February total puts March back to buying 0.25 for 230,000.
-  ts = applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000)]);
+  ts = deriveTrades([], [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 480_000)]);
   assert.deepEqual(sides(ts), ["buy 0.25", "buy 0.25"]); near(tradeCash(ts[1]), 230_000);
 
   // Entered trades count, including those on the same day as a total; a later total absorbs an earlier buy.
-  ts = applyTotals([tr(9, "2025-01-15", "buy", 0.1, 1_000_000), tr(9, "2025-03-01", "buy", 0.05, 1_000_000)],
+  ts = deriveTrades([tr(9, "2025-01-15", "buy", 0.1, 1_000_000), tr(9, "2025-03-01", "buy", 0.05, 1_000_000)],
     [tot(1, "2025-01-01", 0.25, 250_000), tot(2, "2025-03-01", 0.5, 500_000)]);
   near(at(ts, "2025-01-20").quantity, 0.35); near(at(ts, "2025-01-20").cost, 350_000);
   near(at(ts, "2025-03-01").quantity, 0.5); near(at(ts, "2025-03-01").cost, 500_000);
   assert.deepEqual(sides(ts.filter((t) => t.total)), ["buy 0.25", "buy 0.1"]);
 
   // A total that lowers the holding below a later sale is flagged, as an oversell would be.
-  ts = applyTotals([tr(9, "2025-01-01", "buy", 1, 10), tr(9, "2025-03-01", "sell", 0.8, 10)], [tot(1, "2025-02-01", 0.5, 5, 10)]);
+  ts = deriveTrades([tr(9, "2025-01-01", "buy", 1, 10), tr(9, "2025-03-01", "sell", 0.8, 10)], [tot(1, "2025-02-01", 0.5, 5, 10)]);
   assert.equal(replay(ts).ok, false);
 
   // No change in units still records the price, and can still correct the cost.
-  ts = applyTotals([tr(9, "2025-01-01", "buy", 2, 10)], [tot(1, "2025-02-01", 2, 22, 15)]);
+  ts = deriveTrades([tr(9, "2025-01-01", "buy", 2, 10)], [tot(1, "2025-02-01", 2, 22, 15)]);
   near(ts[1].quantity, 0); near(latestPrice(ts, []).price, 15); near(replay(ts).cost, 22); near(tradeCash(ts[1]), 2);
 
   // Values over time follow the totals: 0.7 BTC at 1.2m on 1 Feb.
-  const e = investmentEntries(9, applyTotals([], [tot(1, "2025-01-01", 0.25, 250_000), tot(3, "2025-02-01", 0.7, 700_000, 1_200_000)]), []);
+  const e = investmentEntries(9, deriveTrades([], [tot(1, "2025-01-01", 0.25, 250_000), tot(3, "2025-02-01", 0.7, 700_000, 1_200_000)]), []);
   near(e[1].value, 840_000); near(e[1].cost, 700_000); near(e[1].contribution, 450_000);
 }
 console.log("totals ok");
+
+// Transfers: units move with their share of the cost at the sender's average; no profit taken, no money in or out overall.
+{
+  const xfer = (id, from, to, date, units, fee = 0) => ({ id, fromAccountId: from, toAccountId: to, date, units, fee, note: null });
+  const of = (ts, acc, date = "9999-12-31") => replay(ts.filter((t) => t.accountId === acc && t.date <= date));
+  // Exchange (1) buys 1 BTC at 1,000,000 then 1 at 2,000,000: average 1,500,000. Sends 0.5 to the wallet (2), 0.01 fee.
+  const trades = [tr(1, "2025-01-01", "buy", 1, 1_000_000), tr(1, "2025-02-01", "buy", 1, 2_000_000)];
+  let ts = deriveTrades(trades, [], [xfer(1, 1, 2, "2025-03-01", 0.5, 0.01)], [px(1, "2025-03-01", 3_000_000)]);
+  const ex = of(ts, 1), wa = of(ts, 2);
+  near(ex.quantity, 1.49); near(wa.quantity, 0.5);
+  near(wa.cost, 750_000); near(wa.avgCost, 1_500_000);           // cost moved at the sender's average
+  near(ex.avgCost, 1_500_000); near(ex.cost, 1.49 * 1_500_000);  // sender's average unchanged
+  near(ex.realized, -15_000); near(wa.realized, 0);              // the fee is a small realised loss
+  // The wallet takes the exchange's price that day; the exchange's own price history is untouched by it.
+  assert.equal(latestPrice(ts.filter((t) => t.accountId === 2), []).price, 3_000_000);
+  assert.equal(priceHistory(ts.filter((t) => t.accountId === 1), [px(1, "2025-03-01", 3_000_000)]).length, 3);
+  // Performance: out of one, into the other, at that day's value; together they cancel.
+  const flows = (acc) => investmentEntries(acc, ts.filter((t) => t.accountId === acc), acc === 1 ? [px(1, "2025-03-01", 3_000_000)] : [])
+    .find((e) => e.date === "2025-03-01").contribution;
+  near(flows(1), -1_500_000); near(flows(2), 1_500_000);
+
+  // Sending more than held is flagged; a transfer entered for an earlier date moves a later total's difference.
+  assert.equal(of(deriveTrades(trades, [], [xfer(1, 1, 2, "2025-01-15", 1.5)]), 1).ok, false);
+  const tot = { id: 1, accountId: 2, date: "2025-04-01", units: 0.8, cost: 1_200_000, price: 3_000_000, note: null };
+  ts = deriveTrades(trades, [tot], [xfer(1, 1, 2, "2025-03-01", 0.5)]);
+  assert.equal(ts.find((t) => t.total).quantity, 0.3);
+  near(of(ts, 2).quantity, 0.8); near(of(ts, 2).cost, 1_200_000);
+
+  // A chain: the wallet sends on to cold storage (3) after a further buy on the wallet; cost follows each average.
+  ts = deriveTrades([...trades, tr(2, "2025-03-10", "buy", 0.5, 2_500_000)], [], [xfer(1, 1, 2, "2025-03-01", 0.5), xfer(2, 2, 3, "2025-03-20", 1)]);
+  near(of(ts, 3).cost, 750_000 + 1_250_000); near(of(ts, 2).quantity, 0);
+}
+console.log("transfers ok");

@@ -1,25 +1,29 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { updateNotes } from "@/app/actions/money";
 import EditDialog from "./EditDialog";
 import Markdown from "./Markdown";
 import type { FormState } from "@/app/actions/auth";
 
-/** Opens the asset's notes in a dialog to write in Markdown, with a preview of how they will look. */
-export default function NotesEditor({ accountId, notes }: { accountId: number; notes: string | null }) {
+type Save = (prev: FormState, form: FormData) => Promise<FormState>;
+
+/**
+ * Opens notes (of an asset or a plan) in a dialog to write in Markdown, with a preview of how they will look.
+ * `save` is the server action that stores them, bound to what they belong to; it reads the "notes" field.
+ */
+export default function NotesEditor({ notes, save, placeholder }: { notes: string | null; save: Save; placeholder?: string }) {
   return (
     <EditDialog label="Edit notes" title="Notes" wide trigger={notes ? undefined : "Add notes"}>
-      {(close) => <NotesForm accountId={accountId} notes={notes ?? ""} onDone={close} />}
+      {(close) => <NotesForm notes={notes ?? ""} save={save} placeholder={placeholder} onDone={close} />}
     </EditDialog>
   );
 }
 
-function NotesForm({ accountId, notes, onDone }: { accountId: number; notes: string; onDone: () => void }) {
+function NotesForm({ notes, save, placeholder, onDone }: { notes: string; save: Save; placeholder?: string; onDone: () => void }) {
   const [text, setText] = useState(notes);
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [state, action, pending] = useActionState<FormState, FormData>(async (prev, form) => {
-    const result = await updateNotes(accountId, prev, form);
+    const result = await save(prev, form);
     if (!result?.error) onDone();
     return result;
   }, undefined);
@@ -44,7 +48,7 @@ function NotesForm({ accountId, notes, onDone }: { accountId: number; notes: str
         onChange={(e) => setText(e.target.value)}
         rows={14}
         maxLength={20_000}
-        placeholder={"Where it's held, account numbers, why you bought it…\n\n**bold**, *italic*, - lists, [links](https://example.com), | tables |"}
+        placeholder={`${placeholder ?? "Anything worth keeping…"}\n\n**bold**, *italic*, - lists, [links](https://example.com), | tables |`}
         className={`field min-h-64 w-full resize-y font-mono text-sm leading-relaxed ${tab === "write" ? "" : "hidden"}`}
         aria-label="Notes in Markdown"
       />
