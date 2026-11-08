@@ -37,6 +37,10 @@ in `package.json` to match.
 - A **reload button** in the top bar, before the theme switch, for using the app as an installed web app.
 - When a newer version has been deployed, a bar at the bottom asks you to **reload**. The open app checks every minute
   and whenever it comes back to the foreground.
+- On a narrow screen the top menu moves into a **hamburger menu** (pages, Settings and Sign out); reload and the theme
+  switch stay in the bar.
+- The app has its own **icon** (the sprout) for "Add to Home Screen" on iPhone and Android, and opens full screen under
+  the name Money Life.
 - Docker publishes the web app on port **3333** and Postgres on **5333**, so it can run beside other projects.
 
 ## [0.3.0] - 2026-11-08

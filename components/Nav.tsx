@@ -67,6 +67,10 @@ function RefreshButton() {
 export default function Nav({ userName }: { userName: string | null }) {
   const pathname = usePathname();
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  // The menu on a narrow screen is open for the page it was opened on, so going anywhere closes it.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const close = () => setOpenOn(null);
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface/85 backdrop-blur">
@@ -77,7 +81,7 @@ export default function Nav({ userName }: { userName: string | null }) {
           <span>Money<span className="text-brand">Life</span></span>
         </Link>
         {userName && (
-          <nav className="ml-2 flex min-w-0 gap-1 overflow-x-auto">
+          <nav className="ml-2 hidden min-w-0 gap-1 overflow-x-auto lg:flex">
             {TABS.map((t) => (
               <Link
                 key={t.href}
@@ -95,7 +99,7 @@ export default function Nav({ userName }: { userName: string | null }) {
           <ThemeToggle />
           {userName && (
             <Link href="/settings" aria-label="Settings" aria-current={pathname.startsWith("/settings") ? "page" : undefined} title="Settings"
-              className={`grid size-9 place-items-center rounded-full ${pathname.startsWith("/settings") ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2"}`}>
+              className={`hidden size-9 place-items-center lg:grid rounded-full ${pathname.startsWith("/settings") ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2"}`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
@@ -103,14 +107,35 @@ export default function Nav({ userName }: { userName: string | null }) {
             </Link>
           )}
           {userName && (
-            <form action={logout}>
+            <form action={logout} className="hidden lg:block">
               <button className="rounded-full bg-surface-2 px-3.5 py-2 text-sm font-semibold text-ink-2" title={`Signed in as ${userName}`}>
                 Sign out
               </button>
             </form>
           )}
+          {userName && (
+            <button onClick={() => setOpenOn(open ? null : pathname)} aria-expanded={open} aria-controls="mobile-menu" aria-label={open ? "Close the menu" : "Open the menu"}
+              className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-2 lg:hidden">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+              </svg>
+            </button>
+          )}
         </div>
       </div>
+      {userName && open && (
+        <nav id="mobile-menu" aria-label="Menu" className="absolute inset-x-0 top-full border-b border-line bg-surface px-4 pb-4 pt-2 shadow-lg lg:hidden">
+          {[...TABS, { href: "/settings", label: "Settings" }].map((t) => (
+            <Link key={t.href} href={t.href} onClick={close} aria-current={active(t.href) ? "page" : undefined}
+              className={`block rounded-xl px-3 py-3 text-base font-semibold ${active(t.href) ? "bg-brand-soft text-brand" : "text-ink-2"}`}>
+              {t.label}
+            </Link>
+          ))}
+          <form action={logout} className="mt-2 border-t border-line pt-3">
+            <button className="w-full rounded-xl bg-surface-2 px-3 py-3 text-left text-base font-semibold text-ink-2">Sign out <span className="font-normal text-ink-3">· {userName}</span></button>
+          </form>
+        </nav>
+      )}
     </header>
   );
 }

@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   // Pages set only their own name; renaming the app is a one-line change.
   title: { default: "Money Life", template: "%s · Money Life" },
   description: "Track what you own, and how it performs.",
+  // Added to the iPhone home screen it opens like an app, under its own name.
+  appleWebApp: { capable: true, title: "Money Life", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
