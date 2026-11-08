@@ -7,6 +7,7 @@ import { logout } from "@/app/actions/auth";
 
 const TABS = [
   { href: "/", label: "Overview" },
+  { href: "/performance", label: "Performance" },
   { href: "/accounts", label: "Assets" },
   { href: "/categories", label: "Categories" },
   { href: "/plans", label: "Plans" },

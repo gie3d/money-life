@@ -1,24 +1,25 @@
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
-import NetWorthChart from "@/components/NetWorthChart";
+import ForecastChart from "@/components/ForecastChart";
 import UpdateValues, { type ValueRow } from "@/components/UpdateValues";
 import PieCard from "@/components/PieCard";
-import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
+import { listAccounts, listCategories, listEntries, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
-import { accountPerformance, chartYears, extendTo, netWorthSeries, periodStart, PERIODS, totalPerformance, type Period } from "@/lib/performance";
+import { extendTo, netWorthSeries } from "@/lib/performance";
+import { forecast } from "@/lib/forecast";
+import { payments } from "@/lib/plan";
 import { accountEntries, holdings, slices } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
-export default async function Overview({ searchParams }: PageProps<"/">) {
+export default async function Overview() {
   const user = await requireUser();
-  const sp = await searchParams;
-  const requested = (PERIODS.find((p) => p.id === sp.period)?.id ?? "3M") as Period;
   const cur = user.currency;
 
-  const [accounts, entries, categories, trades, prices] = await Promise.all([
+  const [accounts, entries, categories, trades, prices, plans, planItems] = await Promise.all([
     listAccounts(user.id), listEntries(user.id), listCategories(user.id), listTrades(user.id), listPrices(user.id),
+    listPlans(user.id), listPlanItems(user.id),
   ]);
   const categoryOrder = categories.map((c) => ({ id: String(c.id), label: c.name }));
   const categoryColor = new Map(categories.map((c) => [String(c.id), c.color]));
@@ -65,27 +66,14 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
   const byCategory = (metric: (h: (typeof rows)[number]) => number) =>
     slices(rows, (h) => String(h.account.categoryId), metric, categoryOrder).map((sl) => ({ ...sl, color: categoryColor.get(sl.id) ?? "#8e8e93" }));
 
-  // Period view: how the money performed, with deposits taken out.
+  // Where the total value is heading: the last 12 months' average change carried on, less plan payments.
+  // Plans are only subtracted here, in the forecast; nothing is ever taken out of an asset.
   const lists = rows.map((h) => accountEntries(h.account, entries, trades, prices));
-  const invLists = lists.filter((_, i) => rows[i].investment);
   const today = new Date().toISOString().slice(0, 10);
-  const firstDate = lists.flat().map((e) => e.date).sort()[0];
-  // A range ending today, or one calendar year (to today for the current one).
-  const years = chartYears(firstDate, today);
-  const year = years.find((y) => String(y) === sp.year);
-  const period = year ? null : requested;
-  const from = year ? `${year}-01-01` : periodStart(requested, today);
-  const end = year && `${year}-12-31` < today ? `${year}-12-31` : today;
-  // Never reach back past the first record: a "1Y" view of a 2-month-old tracker is 2 months.
-  const start = from && from > firstDate ? from : firstDate;
-  const perf = totalPerformance(invLists, start, end);
-  const series = extendTo(netWorthSeries(lists, start, end), end);
-  const invSeries = extendTo(netWorthSeries(invLists, start, end), end);
-  // Each investment over the same window, leaving out any not held at all during it.
-  const perAsset = rows
-    .map((h, i) => ({ h, p: h.investment ? accountPerformance(lists[i], start, end) : null }))
-    .filter((x): x is { h: typeof x.h; p: NonNullable<typeof x.p> } => x.p !== null && (x.p.start !== 0 || x.p.end !== 0 || x.p.contributions !== 0))
-    .sort((a, b) => b.p.gain - a.p.gain);
+  const planName = new Map(plans.map((p) => [p.id, p.name]));
+  const itemPlan = new Map(planItems.map((i) => [i.id, planName.get(i.planId) ?? ""]));
+  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems));
+  const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -103,6 +91,43 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
             {realized !== 0 && <span className="font-medium opacity-80"> · {signedMoney(realized, cur)} realized from sales</span>}
           </p>
         )}
+        <Link href="/performance" className="mt-4 inline-block rounded-full bg-white/20 px-4 py-1.5 text-sm font-semibold hover:bg-white/30">See performance →</Link>
+      </section>
+
+      <section className="card p-4 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-3">
+          <div className="mr-auto">
+            <h2 className="text-lg">Next 6 months</h2>
+            <p className="text-xs text-ink-3">Forecast to {day(ahead.end.date)}</p>
+          </div>
+          <Stat
+            label={ahead.basisMonths >= 1 ? `Trend · last ${Math.round(ahead.basisMonths)} mo` : "Trend"}
+            value={ahead.basisMonths >= 1 ? `${signedMoney(ahead.monthly, cur)} / mo` : "Not enough history"}
+            cls={tone(ahead.monthly)}
+          />
+          <Stat label="On trend" value={money(ahead.end.trend, cur)} />
+          {planDue > 0 && <Stat label="Plan costs due" value={`−${money(planDue, cur)}`} cls="text-miss-text" />}
+          {planDue > 0 && <Stat label="After plan costs" value={money(ahead.end.afterPlans, cur)} cls={ahead.end.afterPlans < 0 ? "text-miss-text" : ""} />}
+        </div>
+        <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={planDue > 0} />
+        {ahead.payments.length > 0 && (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer font-semibold text-ink-2">Plan payments in the next 6 months ({ahead.payments.length})</summary>
+            <ul className="mt-2 divide-y divide-line">
+              {ahead.payments.map((p, i) => (
+                <li key={`${p.itemId}-${p.date}-${i}`} className="flex items-center gap-3 py-2">
+                  <span className="num w-24 shrink-0 text-ink-3">{day(p.date)}</span>
+                  <span className="min-w-0 flex-1 truncate">{p.name}<span className="text-ink-3"> · {itemPlan.get(p.itemId)}</span></span>
+                  <span className="num font-semibold">{money(p.amount, cur)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <p className="mt-3 text-xs text-ink-3">
+          The trend carries on the average monthly change in your total value over the last 12 months (or since your first record), money added or taken out included.
+          {planDue > 0 && " The red line also takes off the payments in your plans as they fall due."} It is a forecast only: your assets are not changed.
+        </p>
       </section>
 
       <div className="grid gap-5 md:grid-cols-3">
@@ -173,87 +198,6 @@ export default async function Overview({ searchParams }: PageProps<"/">) {
         </div>
       </section>
 
-      <nav className="flex items-center gap-1.5 overflow-x-auto" aria-label="Period">
-        {PERIODS.map((p) => (
-          <Link key={p.id} href={`/?period=${p.id}`} scroll={false} aria-current={p.id === period ? "page" : undefined}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${p.id === period ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
-            {p.label}
-          </Link>
-        ))}
-        <span className="mx-1.5 h-5 w-px shrink-0 bg-line" aria-hidden />
-        {years.map((y) => (
-          <Link key={y} href={`/?year=${y}`} scroll={false} aria-current={y === year ? "page" : undefined}
-            className={`num shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold ${y === year ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
-            {y}
-          </Link>
-        ))}
-      </nav>
-
-      <section className="card p-4 sm:p-6">
-        <h2 className="mb-3 text-lg">{year ? `Total value in ${year}` : `Total value since ${day(start)}`}</h2>
-        <NetWorthChart data={series} currency={cur} title="Total value" />
-      </section>
-
-      {invs.length > 0 && (
-        <section className="card p-4 sm:p-6">
-          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <h2 className="mr-auto text-lg">{year ? `Investment performance in ${year}` : "Investment performance"}</h2>
-            <Stat label="Paid in" value={signedMoney(perf.contributions, cur)} />
-            <Stat label="Gain" value={signedMoney(perf.gain, cur)} cls={tone(perf.gain)} />
-            <Stat label="Return" value={pct(perf.returnPct)} cls={tone(perf.returnPct ?? 0)} />
-          </div>
-          <NetWorthChart data={invSeries} currency={cur} title="Investment performance" showCost />
-          <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you still hold cost, fees included; the gap above it is profit. Return is time-weighted, so it differs from the profit on cost above.</p>
-        </section>
-      )}
-
-      {perAsset.length > 0 && (
-        <section className="card overflow-hidden">
-          <h2 className="p-4 text-lg sm:px-6">{year ? `Performance by asset in ${year}` : `Performance by asset since ${day(start)}`}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
-              <thead>
-                <tr className="eyebrow border-y border-line text-left">
-                  <th className="py-2 pl-4 sm:pl-6">Asset</th>
-                  <th className="py-2 text-right">Value at start</th>
-                  <th className="py-2 text-right">Paid in</th>
-                  <th className="py-2 text-right">Value at end</th>
-                  <th className="py-2 text-right">Gain</th>
-                  <th className="py-2 pr-4 text-right sm:pr-6">Return</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {perAsset.map(({ h, p }) => (
-                  <tr key={h.account.id}>
-                    <td className="py-3 pl-4 font-semibold sm:pl-6">
-                      <Link href={`/accounts/${h.account.id}${year ? `?year=${year}` : ""}`}>{h.account.name}</Link>
-                      <span className="block text-xs font-normal text-ink-3">{h.account.categoryName}</span>
-                    </td>
-                    <td className="num py-3 text-right">{money(p.start, cur)}</td>
-                    <td className="num py-3 text-right">{signedMoney(p.contributions, cur)}</td>
-                    <td className="num py-3 text-right font-semibold">{money(p.end, cur)}</td>
-                    <td className={`num py-3 text-right font-semibold ${tone(p.gain)}`}>{signedMoney(p.gain, cur)}</td>
-                    <td className={`num py-3 pr-4 text-right font-semibold sm:pr-6 ${tone(p.returnPct ?? 0)}`}>{pct(p.returnPct)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-line font-bold">
-                  <td className="py-3 pl-4 sm:pl-6">All investments</td>
-                  <td className="num py-3 text-right">{money(perf.start, cur)}</td>
-                  <td className="num py-3 text-right">{signedMoney(perf.contributions, cur)}</td>
-                  <td className="num py-3 text-right">{money(perf.end, cur)}</td>
-                  <td className={`num py-3 text-right ${tone(perf.gain)}`}>{signedMoney(perf.gain, cur)}</td>
-                  <td className={`num py-3 pr-4 text-right sm:pr-6 ${tone(perf.returnPct ?? 0)}`}>{pct(perf.returnPct)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
-            Gain is the change in value that didn&apos;t come from money paid in. For an asset first recorded inside this window, its first value counts as the start, not as money paid in.
-          </p>
-        </section>
-      )}
     </div>
   );
 }
