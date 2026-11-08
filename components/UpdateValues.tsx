@@ -65,6 +65,12 @@ export default function UpdateValues({ rows, currency }: { rows: ValueRow[]; cur
 
 function Table({ rows, currency }: { rows: ValueRow[]; currency: string }) {
   const [typed, setTyped] = useState<Record<number, string>>({});
+  // A price typed on a category row, copied into every investment under it (each can still be changed after).
+  const [catTyped, setCatTyped] = useState<Record<number, string>>({});
+  const setCategory = (items: ValueRow[], categoryId: number, raw: string) => {
+    setCatTyped((c) => ({ ...c, [categoryId]: raw }));
+    setTyped((t) => ({ ...t, ...Object.fromEntries(items.filter((r) => r.investment).map((r) => [r.id, raw])) }));
+  };
   // What each asset would be worth with what is typed so far; unchanged where nothing is.
   const newValue = (r: ValueRow) => {
     const v = parse(typed[r.id] ?? "");
@@ -112,11 +118,23 @@ function Table({ rows, currency }: { rows: ValueRow[]; currency: string }) {
               return (
                 <tbody key={key}>
                   <tr className="bg-surface-2 font-bold">
-                    <td className="py-2.5 pl-4 sm:pl-6" colSpan={3}>
+                    <td className="py-2.5 pl-4 sm:pl-6" colSpan={2}>
                       <span className="inline-flex items-center gap-2">
                         <span className="size-2.5 rounded-full" style={{ background: items[0].color }} />
                         {items[0].category}
                       </span>
+                      {items.filter((r) => r.investment).length > 1 && <p className="text-xs font-normal text-ink-3">One price for all {items.filter((r) => r.investment).length} investments</p>}
+                    </td>
+                    <td className="py-1.5">
+                      {items.filter((r) => r.investment).length > 1 && (
+                        <NumberInput
+                          aria-label={`New price per unit for every investment in ${items[0].category} (${currency})`}
+                          placeholder="Price for all"
+                          value={catTyped[key] ?? ""}
+                          onValueChange={(raw) => setCategory(items, key, raw)}
+                          className="field num ml-auto block w-40 bg-surface py-2 text-right font-normal"
+                        />
+                      )}
                     </td>
                     <td className="num py-2.5 text-right">{money(a, currency)}</td>
                     <td className="num py-2.5 text-right">{money(b, currency)}</td>

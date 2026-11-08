@@ -106,7 +106,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
   const ahead = s.gap >= 0;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-[92rem] space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Goals", href: "/goals" }, { label: goal.name }]} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -126,7 +126,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         </section>
       ) : (
         <div className="flex items-center gap-3 text-sm text-ink-3">
-          <NotesEditor notes={null} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" />
+          <div className="shrink-0"><NotesEditor notes={null} save={updateGoalNotes.bind(null, id)} placeholder="Why this goal, what you decided, links…" /></div>
           <span>Keep notes on this goal: why, what you decided, links.</span>
         </div>
       )}
@@ -137,7 +137,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         </p>
       )}
 
-      <section className="card grid grid-cols-2 gap-x-6 gap-y-5 p-5 sm:p-6 lg:grid-cols-4">
+      <section className="card grid grid-cols-1 gap-x-6 gap-y-5 p-5 min-[480px]:grid-cols-2 sm:p-6 lg:grid-cols-4">
         <Figure label="Target" value={money(target, cur)}
           hint={plan.targetMode === "spending" ? `${money(plan.monthlySpending ?? 0, cur)}/month today, at ${pct(plan.withdrawalRate)} a year` : `on ${day(plan.targetDate)}`} />
         <Figure label="Now" value={money(s.actual, cur)} hint={`${target > 0 ? ((s.actual / target) * 100).toFixed(1) : "0"}% of the target`} />
@@ -172,25 +172,34 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
       </section>
 
       <section className="card overflow-hidden">
-        <h2 className="p-4 text-lg sm:px-6">Year by year</h2>
+        <h2 className="p-4 pb-0 text-lg sm:px-6">Year by year</h2>
+        <p className="px-4 pb-3 pt-1 text-xs text-ink-3 sm:px-6">Is it growing as planned? Growth is what the assets gained from returns in the year, apart from money put in.</p>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-sm">
+          <table className="w-full whitespace-nowrap text-[13px] xl:text-sm">
             <thead>
               <tr className="eyebrow text-left">
-                <th className="py-2 pl-4 sm:pl-6">Year</th>
-                <th className="py-2 text-right">Put in · plan</th>
-                <th className="py-2 text-right">Put in · actual</th>
-                <th className="py-2 text-right">Value · plan</th>
-                <th className="py-2 text-right">Value · actual</th>
-                <th className="py-2 pr-4 text-right sm:pr-6">Difference</th>
+                <th className="py-1.5 pl-4 sm:pl-6" rowSpan={2}>Year</th>
+                <th className="py-1.5 text-center" colSpan={2}>Put in</th>
+                <th className="py-1.5 text-center" colSpan={3}>Growth</th>
+                <th className="py-1.5 pr-4 text-center sm:pr-6" colSpan={3}>Value at the end</th>
+              </tr>
+              <tr className="eyebrow">
+                {["Plan", "Actual", "Plan", "Actual", "Difference", "Plan", "Actual", "Difference"].map((h, i) => (
+                  <th key={i} className={`py-1.5 text-right ${i === 7 ? "pr-4 sm:pr-6" : ""}`}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {years.map((y) => (
                 <tr key={y.year} className={y.actualEnd === null ? "text-ink-3" : ""}>
-                  <td className="num py-2.5 pl-4 font-semibold sm:pl-6">{y.year}{String(y.year) === today.slice(0, 4) && <span className="ml-1 text-xs font-normal text-ink-3">to date</span>}</td>
+                  <td className="num py-2.5 pl-4 font-semibold sm:pl-6">{y.year}{y.toDate && <span className="ml-1 text-xs font-normal text-ink-3">to date</span>}</td>
                   <td className="num py-2.5 text-right">{money(y.plannedPaid, cur)}</td>
                   <td className="num py-2.5 text-right">{y.actualPaid === null ? "—" : money(y.actualPaid, cur)}</td>
+                  <td className="num py-2.5 text-right">{money(y.plannedGrowth, cur)}</td>
+                  <td className="num py-2.5 text-right">{y.actualGrowth === null ? "—" : money(y.actualGrowth, cur)}</td>
+                  <td className={`num py-2.5 text-right ${y.actualGrowth === null ? "" : tone(y.actualGrowth - y.plannedGrowth)}`}>
+                    {y.actualGrowth === null ? "—" : signedMoney(y.actualGrowth - y.plannedGrowth, cur)}
+                  </td>
                   <td className="num py-2.5 text-right">{money(y.plannedEnd, cur)}</td>
                   <td className="num py-2.5 text-right font-semibold">{y.actualEnd === null ? "—" : money(y.actualEnd, cur)}</td>
                   <td className={`num py-2.5 pr-4 text-right sm:pr-6 ${y.actualEnd === null ? "" : tone(y.actualEnd - y.plannedEnd)}`}>
@@ -199,9 +208,24 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-line font-bold">
+                <td className="py-3 pl-4 sm:pl-6">In total</td>
+                <td className="num py-3 text-right">{money(s.plannedPaid, cur)}</td>
+                <td className="num py-3 text-right">{money(s.actualPaid, cur)}</td>
+                <td className="num py-3 text-right">{money(s.planned - plan.startValue - s.plannedPaid, cur)}</td>
+                <td className="num py-3 text-right">{money(s.actual - plan.startValue - s.actualPaid, cur)}</td>
+                <td className={`num py-3 text-right ${tone(s.fromReturns)}`}>{signedMoney(s.fromReturns, cur)}</td>
+                <td className="num py-3 text-right">{money(s.planned, cur)}</td>
+                <td className="num py-3 text-right">{money(s.actual, cur)}</td>
+                <td className={`num py-3 pr-4 text-right sm:pr-6 ${tone(s.gap)}`}>{signedMoney(s.gap, cur)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
-        <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">For the current year the plan column is the whole year and the actual is to date.</p>
+        <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
+          This year is compared up to today. The total runs from {day(plan.startDate)} to today, starting from {money(plan.startValue, cur)}; the years after are the plan alone.
+        </p>
       </section>
 
       <div className="space-y-5">
@@ -331,9 +355,9 @@ function yearCells(key: string, c: YearCell, cur: string, strong: boolean) {
 
 function Figure({ label, value, hint, cls = "" }: { label: string; value: string; hint?: string; cls?: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="eyebrow">{label}</p>
-      <p className={`num text-xl font-bold ${cls}`}>{value}</p>
+      <p className={`num text-xl font-bold [overflow-wrap:anywhere] ${cls}`}>{value}</p>
       {hint && <p className="text-xs text-ink-3">{hint}</p>}
     </div>
   );

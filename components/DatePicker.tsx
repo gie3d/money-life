@@ -41,16 +41,19 @@ const noSubscribe = () => () => {};
  * A calendar popover that submits an ISO date under `name`. It starts on today in the
  * visitor's own time zone, which the server can't know, so the first render is empty.
  */
-export default function DatePicker({ name, label, defaultValue, onChange }: {
+export default function DatePicker({ name, label, defaultValue, onChange, optional = false, placeholder = "Any date" }: {
   name: string;
   label: string;
   defaultValue?: string;
+  /** For a filter: starts empty instead of on today, and can be cleared. Submits an empty value when no date is set. */
+  optional?: boolean;
+  placeholder?: string;
   /** Called with the date shown, including today once it is known. */
   onChange?: (date: string) => void;
 }) {
   const today = useSyncExternalStore(noSubscribe, localToday, () => "");
   const [picked, setPicked] = useState<string | null>(defaultValue ?? null);
-  const value = picked ?? today;
+  const value = picked ?? (optional ? "" : today);
   useEffect(() => { if (value) onChange?.(value); }, [value, onChange]);
 
   const [open, setOpen] = useState(false);
@@ -117,11 +120,11 @@ export default function DatePicker({ name, label, defaultValue, onChange }: {
         id={id}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`${label}: ${value ? pretty(value) : "loading"}. Change date`}
+        aria-label={`${label}: ${value ? pretty(value) : optional ? "not set" : "loading"}. Change date`}
         onClick={() => (open ? setOpen(false) : show(value || today))}
         className="field flex items-center justify-between gap-2 text-left"
       >
-        <span className="num whitespace-nowrap">{value ? pretty(value) : " "}</span>
+        <span className={`num whitespace-nowrap ${!value && optional ? "text-ink-3" : ""}`}>{value ? pretty(value) : optional ? placeholder : " "}</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-ink-3">
           <rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" />
         </svg>
@@ -233,7 +236,10 @@ export default function DatePicker({ name, label, defaultValue, onChange }: {
           )}
 
           <div className="mt-2 flex justify-between border-t border-line pt-2">
-            <button type="button" onClick={() => choose(today)} className="rounded-full px-3 py-1.5 text-sm font-semibold text-brand hover:bg-surface-2">Today</button>
+            <span className="flex">
+              <button type="button" onClick={() => choose(today)} className="rounded-full px-3 py-1.5 text-sm font-semibold text-brand hover:bg-surface-2">Today</button>
+              {optional && value && <button type="button" onClick={() => { setPicked(""); setOpen(false); trigger.current?.focus(); }} className="rounded-full px-3 py-1.5 text-sm font-semibold text-ink-3 hover:bg-surface-2">Clear</button>}
+            </span>
             <button type="button" onClick={() => { setOpen(false); trigger.current?.focus(); }} className="rounded-full px-3 py-1.5 text-sm font-semibold text-ink-3 hover:bg-surface-2">Close</button>
           </div>
         </div>

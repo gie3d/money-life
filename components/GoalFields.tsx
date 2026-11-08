@@ -6,7 +6,7 @@ import type { TickAsset } from "./AssetTicks";
 import DatePicker from "./DatePicker";
 import NumberInput from "./NumberInput";
 import { axisDate, compactMoney, day, dayWithAge, money, pct, plainNumber } from "@/lib/format";
-import { path, reachDate, requiredMonthly, targetValue, type Plan } from "@/lib/goals";
+import { LIFE_END_AGE, path, reachDate, requiredMonthly, retirementPath, targetValue, type Plan } from "@/lib/goals";
 import { groupBy } from "@/lib/group";
 import { addMonths } from "@/lib/plan";
 import type { Goal, GoalVersion } from "@/lib/types";
@@ -71,7 +71,15 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
   const end = points.at(-1)?.value ?? 0;
   const need = ready ? requiredMonthly(draft, 0) : null;
   const reach = ready ? reachDate(draft, 0) : null;
-  const chart = points.map((p) => ({ date: p.date, savings: p.value, paidIn: now + p.contributed }));
+  // After retiring: the money being spent down, up to the age of 95 (only when the plan has monthly spending).
+  const showRetired = ready && kind === "retirement" && mode === "spending" && !!birth && (parse(f.age) || 0) < LIFE_END_AGE;
+  const retired = showRetired ? retirementPath(draft, end, addMonths(birth, LIFE_END_AGE * 12)) : [];
+  const lastsToAge = retired.length > 0 && retired.at(-1)!.value <= 0
+    ? Math.floor((Date.parse(`${retired.at(-1)!.date}T00:00:00Z`) - Date.parse(`${birth}T00:00:00Z`)) / (365.25 * 86_400_000)) : null;
+  const chart: { date: string; savings?: number; paidIn?: number; retired?: number }[] = [
+    ...points.map((p, i) => ({ date: p.date, savings: p.value, paidIn: now + p.contributed, ...(showRetired && i === points.length - 1 ? { retired: p.value } : {}) })),
+    ...retired.slice(1).map((p) => ({ date: p.date, retired: p.value })),
+  ];
 
   const pctInput = (name: string, label: string, key: keyof typeof f, hint?: string) => (
     <label className="block space-y-1.5">
@@ -173,6 +181,10 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
           <Figure label="Savings by then" value={ready ? money(end, currency) : "—"} cls={ready ? (end >= target ? "text-go-text" : "text-miss-text") : ""}
             hint={ready ? (end >= target ? `reaches the target ${reach ? `on ${day(reach)}` : ""}` : `${money(target - end, currency)} short`) : undefined} />
           <Figure label="Put in each month" value={money(monthlyTotal, currency)} hint={parse(f.growth) > 0 ? `rising ${f.growth}% a year` : undefined} />
+          {showRetired && (
+            <Figure label={`Money at ${LIFE_END_AGE}`} value={money(retired.at(-1)?.value ?? 0, currency)} cls={lastsToAge === null ? "text-go-text" : "text-miss-text"}
+              hint={lastsToAge === null ? "after spending as planned" : `runs out at about ${lastsToAge}`} />
+          )}
           {need !== null && <Figure label="Needed each month" value={money(need, currency)} hint="to land on the target" />}
         </div>
         {ready ? (
@@ -180,9 +192,10 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
             <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
               <li className="flex items-center gap-2"><span className="h-1 w-5 rounded-full bg-brand" />Savings</li>
               <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-ink-3" />Money put in</li>
+              {showRetired && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-sky" />After retiring</li>}
               <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-go" />Target</li>
             </ul>
-            <div className="h-72 w-full" role="img" aria-label="Savings growing towards the target">
+            <div className="h-72 w-full" role="img" aria-label="Savings growing towards the target, then spent down in retirement">
               <ResponsiveContainer>
                 <ComposedChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <defs>
@@ -197,10 +210,12 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
                   <ReferenceLine y={target} stroke="var(--go)" strokeWidth={2} />
                   <Tooltip
                     labelFormatter={(d) => dayWithAge(String(d), kind === "retirement" ? birth : null)}
-                    formatter={(v, name) => [money(Number(v), currency), name === "savings" ? "Savings" : "Money put in"]}
+                    formatter={(v, name) => [money(Number(v), currency), name === "savings" ? "Savings" : name === "retired" ? "After retiring" : "Money put in"]}
                     contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
                   />
                   <Area type="monotone" dataKey="savings" stroke="var(--brand)" strokeWidth={2.5} fill="url(#goal-savings)" />
+                  {showRetired && <ReferenceLine x={goalDate} stroke="var(--ink-3)" strokeDasharray="2 3" />}
+                  <Line type="monotone" dataKey="retired" stroke="var(--sky)" strokeWidth={2.5} strokeDasharray="1 4" strokeLinecap="round" dot={false} connectNulls={false} />
                   <Line type="monotone" dataKey="paidIn" stroke="var(--ink-3)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>

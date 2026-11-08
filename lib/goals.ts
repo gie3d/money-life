@@ -91,6 +91,28 @@ export function requiredMonthly(p: Plan, fromK: number, start?: number | Map<num
   return one > 0 ? Math.max(0, (targetValue(p) - none) / one) : null;
 }
 
+/** How far past the target date the retirement chart runs, as an age. */
+export const LIFE_END_AGE = 95;
+
+/**
+ * What happens to the money after the target date, for a goal planned by monthly spending: the pot keeps growing at the
+ * assets' rate (weighted by their start values) and each month the planned spending, grown by inflation from the plan's
+ * start, comes out. Runs month by month from `endValue` on the target date until `untilDate`, stopping at 0 if it runs out.
+ */
+export function retirementPath(p: Plan, endValue: number, untilDate: string): { date: string; value: number }[] {
+  const spending = p.monthlySpending ?? 0;
+  const rate = p.assets && p.assets.length > 0 ? combined(p.assets).rate : p.expectedReturn;
+  const mr = monthlyRate(rate);
+  const out = [{ date: p.targetDate, value: endValue }];
+  let v = endValue;
+  for (let i = 1; i <= monthsBetween(p.targetDate, untilDate) && v > 0; i++) {
+    const date = addMonths(p.targetDate, i);
+    v = Math.max(0, v * (1 + mr) - spending * Math.pow(1 + p.inflation, years(p.startDate, date)));
+    out.push({ date, value: v });
+  }
+  return out;
+}
+
 /** The first month, carrying on as planned from `start` in month `fromK`, that reaches the target (up to 50 years on). */
 export function reachDate(p: Plan, fromK: number, start?: number | Map<number, number>): string | null {
   const target = targetValue(p);
@@ -162,26 +184,44 @@ export function standing(p: Plan, lists: Entry[][], today: string): Standing {
   return { k, planned: pt.value, actual, gap, fromContributions, fromReturns: gap - fromContributions, plannedPaid: pt.contributed, actualPaid };
 }
 
-export type YearRow = { year: number; plannedPaid: number; actualPaid: number | null; plannedEnd: number; actualEnd: number | null };
+export type YearRow = {
+  year: number;
+  /** The current year is compared to date: plan and actual both stop at today. Later years are the plan alone. */
+  toDate: boolean;
+  plannedPaid: number;
+  actualPaid: number | null;
+  plannedEnd: number;
+  actualEnd: number | null;
+  /** Growth in the year from returns: the value gained less the money put in. */
+  plannedGrowth: number;
+  actualGrowth: number | null;
+};
 
-/** Year by year from the start to the target: planned and actual money put in and value at the year's end (or today). */
+/** Year by year from the start to the target: money put in, value at the year's end and the growth, planned and actual. */
 export function yearly(p: Plan, lists: Entry[][], today: string): YearRow[] {
   const plan = path(p);
+  const n = plan.length - 1;
+  const at = (date: string) => plan[Math.max(0, Math.min(n, monthsBetween(p.startDate, date)))];
   const rows: YearRow[] = [];
   for (let y = +p.startDate.slice(0, 4); y <= +p.targetDate.slice(0, 4); y++) {
-    const inYear = plan.filter((pt) => +pt.date.slice(0, 4) === y);
-    const before = plan.filter((pt) => +pt.date.slice(0, 4) < y).at(-1);
-    const last = inYear.at(-1) ?? before ?? plan[0];
-    const plannedPaid = last.contributed - (before?.contributed ?? 0);
     const yearStart = `${y - 1}-12-31` < p.startDate ? p.startDate : `${y - 1}-12-31`;
-    const yearEnd = `${y}-12-31` < today ? `${y}-12-31` : today;
-    const past = yearStart < today;
+    const fullEnd = `${y}-12-31`;
+    const past = yearStart <= today;
+    const yearEnd = past && fullEnd > today ? today : fullEnd;
+    const from = at(yearStart);
+    const to = at(yearEnd);
+    const plannedPaid = to.contributed - from.contributed;
+    const actualPaid = past ? paidIn(lists, yearStart, yearEnd) : null;
+    const actualEnd = past ? valueOn(lists, yearEnd) : null;
     rows.push({
       year: y,
+      toDate: past && yearEnd === today,
       plannedPaid,
-      actualPaid: past ? paidIn(lists, yearStart, yearEnd) : null,
-      plannedEnd: last.value,
-      actualEnd: past ? valueOn(lists, yearEnd) : null,
+      actualPaid,
+      plannedEnd: to.value,
+      actualEnd,
+      plannedGrowth: to.value - from.value - plannedPaid,
+      actualGrowth: actualEnd === null ? null : actualEnd - valueOn(lists, yearStart) - (actualPaid ?? 0),
     });
   }
   return rows;

@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-goals.mjs
 import assert from "node:assert/strict";
-import { combined, contributionAt, monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, yearly } from "../lib/goals.ts";
+import { combined, contributionAt, monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, yearly, retirementPath } from "../lib/goals.ts";
 
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${a} !~ ${b}`);
 const plan = (o = {}) => ({
@@ -44,7 +44,7 @@ near(s.plannedPaid, 30_000); near(s.actualPaid, 34_000); near(s.fromContribution
 
 // Yearly: the first year has actual figures to today; later years only the plan.
 const ys = yearly(p0, lists, "2026-07-01");
-assert.equal(ys[0].year, 2026); near(ys[0].actualPaid, 34_000); near(ys[0].actualEnd, 140_000); near(ys[0].plannedPaid, 55_000);
+assert.equal(ys[0].year, 2026); near(ys[0].actualPaid, 34_000); near(ys[0].actualEnd, 140_000); near(ys[0].plannedPaid, 30_000); near(ys[0].plannedEnd, 130_000); near(ys[0].actualGrowth, 6_000); near(ys[0].plannedGrowth, 0);
 assert.equal(ys[1].actualPaid, null); assert.equal(ys.at(-1).year, 2036);
 
 // Per asset: each grows at its own rate with its own monthly amount; the path adds them up.
@@ -67,5 +67,13 @@ assert.equal(ys[1].actualPaid, null); assert.equal(ys.at(-1).year, 2036);
   const c = combined(pa.assets);
   near(c.startValue, 150_000); near(c.monthly, 1_000); near(c.rate, 0.08);
   assert.ok(reachDate(pa, 0) !== null);
+}
+
+
+// After the target date: grows at the rate, spending comes out (no inflation here): 1,200,000 at 0% less 10,000 a month lasts 120 months.
+{
+  const pr = plan({ expectedReturn: 0, inflation: 0, monthlySpending: 10_000, targetMode: "spending" });
+  const r = retirementPath(pr, 1_200_000, "2056-01-01");
+  assert.equal(r[0].date, "2036-01-01"); near(r[12].value, 1_080_000); near(r.at(-1).value, 0); assert.equal(r.at(-1).date, "2046-01-01");
 }
 console.log("goals ok");

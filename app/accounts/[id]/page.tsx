@@ -7,6 +7,7 @@ import EditAccountButton from "@/components/EditAccountButton";
 import EditPriceButton from "@/components/EditPriceButton";
 import EditTradeButton from "@/components/EditTradeButton";
 import EntryForm from "@/components/EntryForm";
+import { Pager, PeriodFilter } from "@/components/ListControls";
 import Markdown from "@/components/Markdown";
 import NotesEditor from "@/components/NotesEditor";
 import ProfitChart from "@/components/ProfitChart";
@@ -14,6 +15,7 @@ import PriceForm from "@/components/PriceForm";
 import TradeForm from "@/components/TradeForm";
 import { deleteAccount, deleteEntry, deletePrice, setArchived, updateNotes } from "@/app/actions/money";
 import { sortByCategory } from "@/lib/group";
+import { paginate } from "@/lib/paging";
 import { getAccount, listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone, unitPrice, units } from "@/lib/format";
 import { priceHistory, tradeCash } from "@/lib/investment";
@@ -62,10 +64,14 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
   const from = year ? `${year}-01-01` : periodStart(period!, today);
   const to = year && `${year}-12-31` < today ? `${year}-12-31` : today;
   // Never reach back past the first record: a "1Y" view of a 2-month-old asset is 2 months.
+  // The long lists: newest first, a page at a time, each limited to a period of its own.
+  const tradePage = paginate([...trades].reverse(), sp, "trades", (t) => t.date);
+  const pricePage = paginate(history, sp, "prices", (p) => p.date);
+  const entryPage = paginate([...entries].reverse(), sp, "history", (e) => e.date);
   const series = extendTo(netWorthSeries(dated, from && from > firstDate ? from : null, to), to);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Assets", href: "/accounts" }, { label: account.name }]} />
       <div>
         <p className="eyebrow">{account.categoryName} · {labelOf(TYPES, account.type)} · {labelOf(LIQUIDITY, account.liquidity)}</p>
@@ -152,9 +158,13 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
       )}
 
       {!investment && entries.length > 0 && (
-        <section className="card divide-y divide-line">
-          <h2 className="p-4 text-lg sm:px-6">History</h2>
-          {[...entries].reverse().map((e) => (
+        <>
+        <PeriodFilter from={entryPage.from} to={entryPage.to} sp={sp} id="history" />
+        <section id="history" className="card divide-y divide-line scroll-mt-4">
+          <div>
+            <h2 className="p-4 text-lg sm:px-6">History</h2>
+          </div>
+          {entryPage.rows.map((e) => (
             <div key={e.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{day(e.date)}</p>
@@ -179,63 +189,71 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
               </ConfirmDelete>
             </div>
           ))}
+          <Pager paged={entryPage} sp={sp} name="history" id="history" />
         </section>
+        </>
       )}
 
+      {investment && (trades.length > 0 || history.length > 0) && (
+        <PeriodFilter from={tradePage.from} to={tradePage.to} sp={sp} id="trades" />
+      )}
+
+      <div className="grid items-start gap-5 empty:hidden lg:grid-cols-2">
       {investment && trades.length > 0 && (
-        <section className="card divide-y divide-line">
+        <section id="trades" className="card divide-y divide-line scroll-mt-4">
           <h2 className="p-4 text-lg sm:px-6">Trades</h2>
-          {[...trades].reverse().map((t) => {
+          {tradePage.rows.map((t) => {
             const kind = t.transfer ? (t.transfer.direction === "in" ? "in" : "out") : t.total ? "total" : t.side;
             return (
-              <div key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
-                <span className={`w-12 text-xs font-bold uppercase ${t.total || t.transfer ? "text-ink-2" : t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>
+              <div key={t.id} className="flex items-start gap-3 px-4 py-3 sm:px-6">
+                <span className={`w-12 shrink-0 pt-1 text-xs font-bold uppercase ${t.total || t.transfer ? "text-ink-2" : t.side === "buy" ? "text-go-text" : "text-miss-text"}`}>
                   {kind}
                   {t.transfer && <span className="block text-[10px] font-semibold normal-case text-ink-3">transfer</span>}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold">{day(t.date)}</p>
+                  <p className="whitespace-nowrap font-semibold">{day(t.date)}</p>
                   {t.note && <p className="truncate text-xs text-ink-3">{t.note}</p>}
+                  {t.transfer ? (
+                    <div className="mt-1 min-w-0">
+                      <p className="num font-semibold">
+                        {units(t.transfer.units)} units {t.transfer.direction === "in" ? "← " : "→ "}
+                        <Link href={`/accounts/${t.transfer.otherAccountId}`} className="underline decoration-line underline-offset-2">{nameOf(t.transfer.otherAccountId)}</Link>
+                      </p>
+                      <p className="num text-xs text-ink-3">
+                        {money(t.transfer.cost, cur)} of cost moved
+                        {t.transfer.fee > 0 && t.transfer.direction === "out" && ` · fee ${units(t.transfer.fee)} units`}
+                      </p>
+                    </div>
+                  ) : t.total ? (
+                    <div className="mt-1">
+                      <p className="num font-semibold">{units(t.total.units)} units · cost {money(t.total.cost, cur)}</p>
+                      <p className="num text-xs text-ink-3">
+                        <span className={t.quantity === 0 ? "" : t.side === "buy" ? "text-go-text" : "text-miss-text"}>
+                          {t.quantity === 0 ? "No change in units" : `${t.side === "buy" ? "Bought" : "Sold"} ${units(t.quantity)}`}
+                        </span>
+                        {" · price "}{unitPrice(t.price, cur)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-1">
+                      <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
+                      <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
+                    </div>
+                  )}
                 </div>
-                {t.transfer ? (
-                  <div className="min-w-0 text-right">
-                    <p className="num font-semibold">
-                      {units(t.transfer.units)} units {t.transfer.direction === "in" ? "← " : "→ "}
-                      <Link href={`/accounts/${t.transfer.otherAccountId}`} className="underline decoration-line underline-offset-2">{nameOf(t.transfer.otherAccountId)}</Link>
-                    </p>
-                    <p className="num text-xs text-ink-3">
-                      {money(t.transfer.cost, cur)} of cost moved
-                      {t.transfer.fee > 0 && t.transfer.direction === "out" && ` · fee ${units(t.transfer.fee)} units`}
-                    </p>
-                  </div>
-                ) : t.total ? (
-                  <div className="text-right">
-                    <p className="num font-semibold">{units(t.total.units)} units · cost {money(t.total.cost, cur)}</p>
-                    <p className="num text-xs text-ink-3">
-                      <span className={t.quantity === 0 ? "" : t.side === "buy" ? "text-go-text" : "text-miss-text"}>
-                        {t.quantity === 0 ? "No change in units" : `${t.side === "buy" ? "Bought" : "Sold"} ${units(t.quantity)}`}
-                      </span>
-                      {" · price "}{unitPrice(t.price, cur)}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-right">
-                    <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
-                    <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
-                  </div>
-                )}
                 <EditTradeButton trade={t} currency={cur} label={`Edit ${t.transfer ? "transfer" : kind} on ${day(t.date)}`} transferTargets={transferTargets} />
                 <DeleteTradeButton accountId={account.id} tradeId={t.id} totalId={t.total?.id} transferId={t.transfer?.id} label={`Delete ${t.transfer ? "transfer" : kind} on ${day(t.date)}`} />
               </div>
             );
           })}
+          <Pager paged={tradePage} sp={sp} name="trades" id="trades" />
         </section>
       )}
 
       {investment && history.length > 0 && (
-        <section className="card divide-y divide-line">
+        <section id="prices" className="card divide-y divide-line scroll-mt-4">
           <h2 className="p-4 text-lg sm:px-6">Price history</h2>
-          {history.map((p) => (
+          {pricePage.rows.map((p) => (
             <div key={p.date} className="flex items-center gap-3 px-4 py-3 sm:px-6">
               <div className="flex-1">
                 <p className="font-semibold">{day(p.date)}</p>
@@ -258,8 +276,10 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
               )}
             </div>
           ))}
+          <Pager paged={pricePage} sp={sp} name="prices" id="prices" />
         </section>
       )}
+      </div>
 
       <div className="flex gap-2">
         <form action={setArchived.bind(null, account.id, !account.archived)}>
