@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -179,4 +179,19 @@ export async function listPlanAssets(userId: number): Promise<Map<number, number
   const out = new Map<number, number[]>();
   for (const r of rows) out.set(Number(r.plan_id), [...(out.get(Number(r.plan_id)) ?? []), Number(r.account_id)]);
   return out;
+}
+
+/** The user's bills, by group then name. */
+export async function listBills(userId: number): Promise<Bill[]> {
+  const { rows } = await pool.query(
+    `SELECT id, name, amount, every_months, first_due::text AS first_due, end_date::text AS end_date, group_name, account_id, note, plan_amount, plan_drop
+     FROM bills WHERE user_id = $1 ORDER BY lower(group_name), lower(name), id`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), name: r.name as string, amount: Number(r.amount), everyMonths: Number(r.every_months),
+    firstDue: r.first_due as string, endDate: (r.end_date as string | null) ?? null, group: r.group_name as string,
+    accountId: r.account_id === null ? null : Number(r.account_id), note: (r.note as string | null) ?? null,
+    planAmount: r.plan_amount === null ? null : Number(r.plan_amount), planDrop: r.plan_drop as boolean,
+  }));
 }

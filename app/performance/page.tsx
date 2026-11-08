@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
+import ChartToggle from "@/components/ChartToggle";
 import NetWorthChart from "@/components/NetWorthChart";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
@@ -37,10 +38,12 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
   }
 
   const invs = rows.filter((h) => h.investment);
+  // Investments unticked in the table are left out of the charts and the figures above them.
+  const hidden = String(sp.hide ?? "").split(",").map(Number).filter((id) => invs.some((h) => h.account.id === id));
+  const shown = (h: Holding) => !(h.investment && hidden.includes(h.account.id));
 
   // Period view: how the money performed, with deposits taken out.
   const lists = rows.map((h) => accountEntries(h.account, entries, trades, prices));
-  const invLists = lists.filter((_, i) => rows[i].investment);
   const today = new Date().toISOString().slice(0, 10);
   const firstDate = lists.flat().map((e) => e.date).sort()[0];
   // A range ending today, or one calendar year (to today for the current one).
@@ -51,9 +54,11 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
   const end = year && `${year}-12-31` < today ? `${year}-12-31` : today;
   // Never reach back past the first record: a "1Y" view of a 2-month-old tracker is 2 months.
   const start = from && from > firstDate ? from : firstDate;
-  const perf = totalPerformance(invLists, start, end);
-  const series = extendTo(netWorthSeries(lists, start, end), end);
-  const invSeries = extendTo(netWorthSeries(invLists, start, end), end);
+  const chartLists = lists.filter((_, i) => shown(rows[i]));
+  const chartInvLists = lists.filter((_, i) => rows[i].investment && shown(rows[i]));
+  const perf = totalPerformance(chartInvLists, start, end);
+  const series = extendTo(netWorthSeries(chartLists, start, end), end);
+  const invSeries = extendTo(netWorthSeries(chartInvLists, start, end), end);
   // Investments over the same window, one row per asset, category or liquidity, leaving out any not held at all during it.
   // Cash and saving are left out: their balances don't record money paid in, so a deposit would read as gain.
   const by = GROUPINGS.find((g) => g.id === sp.by)?.id ?? "asset";
@@ -87,7 +92,14 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
     })
     .filter((g) => g.assets.length > 0);
   const windowQuery = year ? `year=${year}` : `period=${period}`;
-  const byQuery = by === "asset" ? "" : `&by=${by}`;
+  const hideQuery = hidden.length > 0 ? `&hide=${hidden.join(",")}` : "";
+  const byQuery = (by === "asset" ? "" : `&by=${by}`) + hideQuery;
+  // What a tick box keeps of the address when it changes the selection.
+  const keep = `${windowQuery}${by === "asset" ? "" : `&by=${by}`}`;
+  const toggle = (members: Holding[], label: string) => (
+    <ChartToggle ids={members.map((h) => h.account.id)} hidden={hidden} query={keep} label={label} />
+  );
+  const off = (members: Holding[]) => members.every((h) => hidden.includes(h.account.id));
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -137,7 +149,7 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
             <h2 className="mr-auto text-lg">{year ? `Performance in ${year}` : `Performance since ${day(start)}`}</h2>
             <nav role="group" aria-label="Group by" className="flex gap-1 rounded-full bg-surface-2 p-1">
               {GROUPINGS.map((g) => (
-                <Link key={g.id} href={`/performance?${windowQuery}${g.id === "asset" ? "" : `&by=${g.id}`}`} scroll={false} aria-current={g.id === by ? "true" : undefined}
+                <Link key={g.id} href={`/performance?${windowQuery}${g.id === "asset" ? "" : `&by=${g.id}`}${hideQuery}`} scroll={false} aria-current={g.id === by ? "true" : undefined}
                   className={`rounded-full px-4 py-1.5 text-sm font-semibold ${g.id === by ? "bg-ink text-surface" : "text-ink-3"}`}>
                   {g.label}
                 </Link>
@@ -148,7 +160,8 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="eyebrow border-y border-line text-left">
-                  <th className="py-2 pl-4 sm:pl-6">{GROUPINGS.find((g) => g.id === by)!.column}</th>
+                  <th className="w-10 py-2 pl-4 sm:pl-6">{toggle(invs, "Show all investments in the charts")}</th>
+                  <th className="py-2">{GROUPINGS.find((g) => g.id === by)!.column}</th>
                   <th className="py-2 text-right">Value at start</th>
                   <th className="py-2 text-right">Net in / out</th>
                   <th className="py-2 text-right">Value at end</th>
@@ -159,8 +172,9 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
               {by === "asset" ? (
                 assetGroups.map((g) => (
                   <tbody key={g.category.id} className="divide-y divide-line">
-                    <tr className="bg-surface-2 font-bold">
-                      <td className="py-2.5 pl-4 sm:pl-6">
+                    <tr className={`bg-surface-2 font-bold ${off(g.assets.flatMap((a) => a.members)) ? "text-ink-3" : ""}`}>
+                      <td className="py-2.5 pl-4 sm:pl-6">{toggle(g.assets.flatMap((a) => a.members), `Show ${g.category.name} in the charts`)}</td>
+                      <td className="py-2.5">
                         <span className="inline-flex items-center gap-2">
                           <span className="size-2.5 rounded-full" style={{ background: g.category.color }} />
                           {g.category.name}
@@ -170,8 +184,9 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
                       <PerfCells p={g.p} cur={cur} />
                     </tr>
                     {g.assets.map(({ key, members, p }) => (
-                      <tr key={key}>
-                        <td className="py-3 pl-8 font-semibold sm:pl-10">
+                      <tr key={key} className={off(members) ? "text-ink-3" : ""}>
+                        <td className="py-3 pl-4 sm:pl-6">{toggle(members, `Show ${members[0].account.name} in the charts`)}</td>
+                        <td className="py-3 pl-6 font-semibold">
                           <Link href={`/accounts/${members[0].account.id}${year ? `?year=${year}` : ""}`}>{members[0].account.name}</Link>
                         </td>
                         <PerfCells p={p} cur={cur} strong />
@@ -185,8 +200,9 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
                     const first = members[0].account;
                     const count = `${members.length} ${members.length === 1 ? "asset" : "assets"}`;
                     return (
-                      <tr key={key}>
-                        <td className="py-3 pl-4 font-semibold sm:pl-6">
+                      <tr key={key} className={off(members) ? "text-ink-3" : ""}>
+                        <td className="py-3 pl-4 sm:pl-6">{toggle(members, `Show ${by === "category" ? first.categoryName : labelOf(LIQUIDITY, key)} in the charts`)}</td>
+                        <td className="py-3 font-semibold">
                           <span className="inline-flex items-center gap-2">
                             <span className="size-2.5 rounded-full" style={{ background: by === "category" ? first.categoryColor : colorFor(key, LIQUIDITY) }} />
                             {by === "category" ? first.categoryName : labelOf(LIQUIDITY, key)}
@@ -201,7 +217,7 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
               )}
               <tfoot>
                 <tr className="border-t border-line font-bold">
-                  <td className="py-3 pl-4 sm:pl-6">All investments</td>
+                  <td className="py-3 pl-4 sm:pl-6" colSpan={2}>{hidden.length > 0 ? "Selected investments" : "All investments"}</td>
                   <td className="num py-3 text-right">{money(perf.start, cur)}</td>
                   <td className="num py-3 text-right">{signedMoney(perf.contributions, cur)}</td>
                   <td className="num py-3 text-right">{money(perf.end, cur)}</td>
@@ -212,7 +228,7 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
             </table>
           </div>
           <div className="space-y-1.5 px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
-            <p>Investments only (cash and savings don&apos;t record money in or out, so a deposit would look like gain).</p>
+            <p>Investments only (cash and savings don&apos;t record money in or out, so a deposit would look like gain). Untick a row to leave it out of the charts above and the totals; cash and savings always count in the Total value chart.</p>
             <ul className="list-disc space-y-1 pl-4">
               <li><span className="font-semibold text-ink-2">Value at start</span>: what it was worth when the period began, from the last value recorded on or before that day. For an asset first recorded inside the period, its first value.</li>
               <li><span className="font-semibold text-ink-2">Net in / out</span>: what you bought minus what you got from sales during the period. Negative means you took money out.</li>

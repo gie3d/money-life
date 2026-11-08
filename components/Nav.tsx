@@ -11,6 +11,7 @@ const TABS = [
   { href: "/accounts", label: "Assets" },
   { href: "/categories", label: "Categories" },
   { href: "/plans", label: "Plans" },
+  { href: "/bills", label: "Bills" },
 ] as const;
 
 const THEME_EVENT = "ml-theme-change";

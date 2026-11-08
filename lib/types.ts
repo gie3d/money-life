@@ -139,3 +139,21 @@ export type PlanItem = {
   /** How many payments, counting the first. Always 1 for a one-time cost. */
   occurrences: number;
 };
+
+/** A regular bill. Payments fall every `everyMonths` months from `firstDue`, until `endDate` if set. */
+export type Bill = {
+  id: number;
+  name: string;
+  amount: number;
+  everyMonths: number;
+  firstDue: string;
+  endDate: string | null;
+  group: string;
+  /** The asset it is paid from, if chosen. */
+  accountId: number | null;
+  note: string | null;
+  /** What-if: a planned new amount, or null to keep the current one. */
+  planAmount: number | null;
+  /** What-if: drop the bill from the planned total. */
+  planDrop: boolean;
+};
