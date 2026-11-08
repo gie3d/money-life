@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Breadcrumb from "@/components/Breadcrumb";
 import DeleteAllData from "@/components/DeleteAllData";
 import NameForm from "@/components/NameForm";
@@ -14,6 +15,14 @@ export default async function SettingsPage() {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Settings" }]} />
       <h1 className="text-3xl">Settings</h1>
+
+      <section className="card flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
+        <div className="max-w-xl">
+          <h2 className="text-lg">Categories</h2>
+          <p className="text-xs text-ink-3">The groups your assets sit in, like Funds, Gold or Savings: add, rename, recolour or remove them.</p>
+        </div>
+        <Link href="/settings/categories" className="btn btn-quiet">Manage categories</Link>
+      </section>
 
       <NameForm name={user.name} email={user.email} />
       <PasswordForm />

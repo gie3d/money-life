@@ -52,7 +52,7 @@ function EditForm({ account, categories, locked, onDone }: { account: Account; c
         {locked
           ? `This asset already has ${isInvestment(account) ? "trades" : "balances"}, so only ${isInvestment(account) ? "investment" : "cash and saving"} categories are offered: the others track assets differently. `
           : "The category decides how it is tracked: Cash and Saving keep a balance, Investment keeps units bought and sold. "}
-        Categories are managed on the <Link href="/categories" className="font-semibold text-brand">Categories</Link> page.
+        Categories are managed on the <Link href="/settings/categories" className="font-semibold text-brand">Categories</Link> page in Settings.
       </p>
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <div className="flex justify-end gap-2">
