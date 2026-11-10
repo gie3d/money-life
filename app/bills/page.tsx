@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Breadcrumb from "@/components/Breadcrumb";
+import SectionTabs from "@/components/SectionTabs";
 import BillForm from "@/components/BillForm";
 import BillsTable from "@/components/BillsTable";
 import { dueWithin } from "@/lib/bills";
@@ -22,7 +22,7 @@ export default async function BillsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Bills" }]} />
+      <SectionTabs section="future" current="/bills" />
       <div>
         <h1 className="text-3xl">Bills</h1>
         <p className="mt-1 text-sm text-ink-3">What you pay regularly, what it adds up to each month, and what it would come to if you changed some.</p>

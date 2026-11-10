@@ -171,9 +171,16 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         </p>
       </section>
 
-      <section className="card overflow-hidden">
-        <h2 className="p-4 pb-0 text-lg sm:px-6">Year by year</h2>
-        <p className="px-4 pb-3 pt-1 text-xs text-ink-3 sm:px-6">Is it growing as planned? Growth is what the assets gained from returns in the year, apart from money put in.</p>
+      {/* The full table is a tap away: the figures above already say where the goal stands. */}
+      <details className="card group overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-3 p-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg font-bold">Year by year</span>
+            <span className="block text-xs text-ink-3">Put in, growth and value each year, plan against actual · <span className={`num font-semibold ${tone(s.gap)}`}>{signedMoney(s.gap, cur)} in total</span></span>
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-brand"><span className="group-open:hidden">Show</span><span className="hidden group-open:inline">Hide</span></span>
+        </summary>
+        <p className="px-4 pb-3 text-xs text-ink-3 sm:px-6">Is it growing as planned? Growth is what the assets gained from returns in the year, apart from money put in.</p>
         <div className="overflow-x-auto">
           <table className="w-full whitespace-nowrap text-[13px] xl:text-sm">
             <thead>
@@ -226,7 +233,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
         <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
           This year is compared up to today. The total runs from {day(plan.startDate)} to today, starting from {money(plan.startValue, cur)}; the years after are the plan alone.
         </p>
-      </section>
+      </details>
 
       <div className="space-y-5">
         <section className="card overflow-hidden">

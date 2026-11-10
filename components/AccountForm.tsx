@@ -10,7 +10,7 @@ import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 export default function AccountForm({ categories }: { categories: Category[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createAccount, undefined);
   return (
-    <form action={action} className="card space-y-4 p-5 sm:p-6">
+    <form id="new-asset" action={action} className="card scroll-mt-20 space-y-4 p-5 sm:p-6">
       <h2 className="text-lg">Add an asset</h2>
       <label className="block space-y-1.5">
         <span className="eyebrow">Name</span>

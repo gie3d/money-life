@@ -52,7 +52,7 @@ export default function UpdateValues({ rows, currency }: { rows: ValueRow[]; cur
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       {saved !== null && !state?.error && (
         <p role="status" className="rounded-xl bg-go-soft px-3 py-2 text-sm font-medium text-go-text">
-          Saved {saved} {saved === 1 ? "value" : "values"}. <Link href="/" className="underline">Back to Overview</Link>
+          Saved {saved} {saved === 1 ? "value" : "values"}. <Link href="/" className="underline">Back to Home</Link>
         </p>
       )}
       <div className="flex gap-2">

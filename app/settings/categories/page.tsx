@@ -23,7 +23,7 @@ export default async function CategoriesPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Settings", href: "/settings" }, { label: "Categories" }]} />
+      <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Settings", href: "/settings" }, { label: "Categories" }]} />
       <h1 className="text-3xl">Categories</h1>
       <CategoryManager categories={categories} usage={usage} totals={totals} currency={user.currency} />
     </div>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Breadcrumb from "@/components/Breadcrumb";
+import SectionTabs from "@/components/SectionTabs";
 import { listGoals, listGoalVersions } from "@/lib/data";
 import { day, money, signedMoney } from "@/lib/format";
 import { goalAssets } from "@/lib/goal-data";
@@ -18,7 +18,7 @@ export default async function GoalsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Goals" }]} />
+      <SectionTabs section="future" current="/goals" />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl">Goals</h1>

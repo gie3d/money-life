@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AllPlansChart, { type AllPlansRow } from "@/components/AllPlansChart";
-import Breadcrumb from "@/components/Breadcrumb";
+import SectionTabs from "@/components/SectionTabs";
 import PlanForm from "@/components/PlanForm";
 import { listAccounts, listEntries, listPlanAssets, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { day, money, monthLabel, tone } from "@/lib/format";
@@ -44,7 +44,7 @@ export default async function PlansPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans" }]} />
+      <SectionTabs section="future" current="/plans" />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl">Plans</h1>

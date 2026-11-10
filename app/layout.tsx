@@ -46,7 +46,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {/* Sets the saved theme before the page paints. Next injects it into the HTML itself, so React never renders a script tag. */}
         <Script id="theme" strategy="beforeInteractive">{themeScript}</Script>
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className={`min-h-full flex flex-col ${user ? "pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0" : ""}`}>
         <Nav userName={user?.name ?? null} />
         <main className="flex-1 w-full">{children}</main>
         <footer className="flex items-center justify-center gap-3 px-4 py-6 text-xs text-ink-3">

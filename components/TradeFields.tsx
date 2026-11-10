@@ -13,12 +13,14 @@ const parse = (s: string) => (s.trim() === "" ? NaN : Number(s.replace(/,/g, "")
 
 type Field = "units" | "price" | "total";
 
+export type Side = "buy" | "sell" | "total" | "transfer";
+
 /**
  * The inputs of a trade, blank for a new one or filled from `trade` when editing.
  * Units, price per unit and total (units x price, before the fee) are tied together: fill in any two
  * and the third is worked out. Only units and price are sent; the total is for convenience.
  */
-export default function TradeFields({ currency, trade, heldOn, transferTargets = [] }: {
+export default function TradeFields({ currency, trade, heldOn, transferTargets = [], initialSide, only }: {
   currency: string;
   /** The trade being edited. One worked out from a total or a transfer is edited as that total or transfer. */
   trade?: Trade;
@@ -26,9 +28,12 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
   heldOn?: (date: string) => { quantity: number; cost: number };
   /** The user's other investments, to send units to. Some given, on a new trade, adds the "Transfer" choice. */
   transferTargets?: { id: number; name: string; archived: boolean; categoryId: number; category: string }[];
+  /** On a new trade, the choice it starts on. */
+  initialSide?: Side;
+  /** On a new trade, the only choices offered; with one, the choice itself isn't shown. */
+  only?: readonly Side[];
 }) {
-  type Side = "buy" | "sell" | "total" | "transfer";
-  const [side, setSide] = useState<Side>(trade?.transfer ? "transfer" : trade?.total ? "total" : (trade?.side ?? "buy"));
+  const [side, setSide] = useState<Side>(trade?.transfer ? "transfer" : trade?.total ? "total" : (trade?.side ?? initialSide ?? "buy"));
   const [transfer, setTransfer] = useState({
     units: trade?.transfer ? plainNumber(trade.transfer.units) : "",
     fee: trade?.transfer && trade.transfer.fee > 0 ? plainNumber(trade.transfer.fee) : "",
@@ -39,8 +44,9 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
     units: trade?.total ? plainNumber(trade.total.units) : "",
     cost: trade?.total ? fmt(trade.total.cost, 2) : "",
   });
-  const choices: readonly Side[] = trade?.transfer ? ["transfer"] : trade?.total ? ["total"] : trade ? ["buy", "sell"]
+  const offered: readonly Side[] = trade?.transfer ? ["transfer"] : trade?.total ? ["total"] : trade ? ["buy", "sell"]
     : transferTargets.some((a) => !a.archived) ? ["buy", "sell", "total", "transfer"] : ["buy", "sell", "total"];
+  const choices = !trade && only ? offered.filter((s) => only.includes(s)) : offered;
   const [values, setValues] = useState<Record<Field, string>>({
     units: trade ? plainNumber(trade.quantity) : "",
     price: trade ? plainNumber(trade.price) : "",
@@ -70,7 +76,8 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
 
   return (
     <>
-      <fieldset className="flex gap-2">
+      {choices.length <= 1 ? <input type="hidden" name="side" value={side} /> : (
+      <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Buy, sell, set the total, or transfer</legend>
         {choices.map((s) => (
           <label key={s} className="cursor-pointer">
@@ -81,6 +88,7 @@ export default function TradeFields({ currency, trade, heldOn, transferTargets =
           </label>
         ))}
       </fieldset>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="block space-y-1.5">
           <span className="eyebrow">Date</span>

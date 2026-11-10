@@ -107,6 +107,20 @@ export const LIQUIDITY = [
   { id: "retirement", label: "Retirement" },
 ] as const;
 
+/**
+ * How long an asset can go without a new value before Home reminds you, by liquidity: cash moves often, while a house
+ * or a pension is usually valued about once a year (so it's only due a little after a year).
+ */
+export const REMIND_AFTER_DAYS: Record<(typeof LIQUIDITY)[number]["id"], number> = {
+  immediate: 45,
+  days: 45,
+  months: 92,
+  years: 395,
+  retirement: 395,
+};
+
+export const remindAfterDays = (liquidity: string) => REMIND_AFTER_DAYS[liquidity as keyof typeof REMIND_AFTER_DAYS] ?? 45;
+
 export const labelOf = (list: readonly { id: string; label: string }[], id: string) =>
   list.find((x) => x.id === id)?.label ?? id;
 

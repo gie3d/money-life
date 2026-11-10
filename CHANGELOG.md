@@ -4,6 +4,39 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.1.0] - 2026-11-11
+
+### Easier to find your way
+- Three sections instead of six tabs: **Home**, **Assets** (with Performance) and **Future** (Goals, Plans and Bills).
+  Each section shows its pages as tabs at the top, with a line on what each one is for.
+- On a phone the sections sit in a **bottom bar**, with Settings beside them; the hamburger menu is gone. Sign out is
+  in Settings.
+
+### Record
+- One **Record** button (the + in the middle of the bottom bar, top right on a computer) asks "What happened?":
+  balances and prices checked, a buy, a sale, money in or out, or units moved between investments. It asks for the
+  asset, then shows only the fields for that choice.
+- Forms say **Saved** when they've saved, with links to the asset, to record something else, or Home.
+
+### Home
+- Home answers three questions: what you have (with the change over the last month), where it's heading (one figure
+  for a year from now, the stats under **More detail**) and whether your goals are on track (one line each).
+- How each figure is worked out is behind a small **i** button instead of paragraphs on the page.
+- When assets are due a new value, Home says which ones and how long ago each was updated, with **Update now**. When
+  an asset is due depends on its liquidity: after 45 days for Immediately and Days, 3 months for Months, and a little
+  over a year for Years and Retirement (a house or a pension is usually valued once a year). **Later** hides the
+  reminder for a week on that device.
+- Allocation moved to the Assets page, and profit or loss now shows on each investment there.
+
+### Simpler pages
+- An investment's page leads with what it's worth, the profit or loss and the units held. The price, average price
+  paid, total paid and profit from sales are under **More details**.
+- A goal's **Year by year** table is folded away, with the total difference on its heading.
+
+### Getting started
+- New users get a short **setup**: pick the currency, tick the kinds of assets you have, enter what each is worth today,
+  then optionally set a goal. It is at `/welcome`, and Home links to it while nothing is recorded.
+
 ## [1.0.0] - 2026-11-08
 
 ### Goals
