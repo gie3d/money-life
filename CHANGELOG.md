@@ -22,7 +22,9 @@ in `package.json` to match.
 - Home answers three questions: what you have (with the change over the last month), where it's heading (one figure
   for a year from now, the stats under **More detail**) and whether your goals are on track (one line each).
 - How each figure is worked out is behind a small **i** button instead of paragraphs on the page.
-- When assets haven't been updated in 45 days or more, Home says which ones, with **Update now**. **Later** hides the
+- When assets are due a new value, Home says which ones and how long ago each was updated, with **Update now**. When
+  an asset is due depends on its liquidity: after 45 days for Immediately and Days, 3 months for Months, and a little
+  over a year for Years and Retirement (a house or a pension is usually valued once a year). **Later** hides the
   reminder for a week on that device.
 - Allocation moved to the Assets page, and profit or loss now shows on each investment there.
 

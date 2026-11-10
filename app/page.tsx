@@ -12,9 +12,7 @@ import { forecast } from "@/lib/forecast";
 import { payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-
-/** Assets not given a value for this many days are pointed out, since forecasts and goals rest on them. */
-const STALE_DAYS = 45;
+import { remindAfterDays } from "@/lib/types";
 
 /**
  * Home answers three questions, each with one figure up front and the detail a tap away: how much you have, whether
@@ -64,8 +62,11 @@ export default async function Home() {
   const base = history.filter((p) => p.date <= monthAgo).at(-1) ?? history[0];
   const change = base && base.date < today ? { since: base.date, amount: totalValue - base.value, pct: base.value > 0 ? (totalValue - base.value) / base.value : null } : null;
 
-  // Assets whose last value is old, oldest first.
-  const stale = rows.filter((h) => daysBetween(h.lastDate, today) >= STALE_DAYS).sort((a, b) => a.lastDate.localeCompare(b.lastDate));
+  // Assets due a new value, by how often their kind changes (see REMIND_AFTER_DAYS), oldest first.
+  const stale = rows
+    .filter((h) => daysBetween(h.lastDate, today) >= remindAfterDays(h.account.liquidity))
+    .sort((a, b) => a.lastDate.localeCompare(b.lastDate))
+    .map((h) => ({ name: h.account.name, days: daysBetween(h.lastDate, today) }));
 
   // Goals, three years out: where each plan should be by then (or at its own date, if sooner), where carrying on
   // from today leads by then, and how each stands against its plan today.
@@ -100,7 +101,7 @@ export default async function Home() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
-      <StaleNotice count={stale.length} days={STALE_DAYS} names={stale.map((h) => h.account.name)} />
+      <StaleNotice items={stale} />
 
       {/* How much do I have? */}
       <section className="rounded-[28px] bg-gradient-to-br from-[var(--hero-a)] via-[var(--hero-b)] to-[var(--hero-c)] p-6 text-white sm:p-8">
