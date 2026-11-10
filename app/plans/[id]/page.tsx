@@ -54,11 +54,11 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans", href: "/plans" }, ...(plan.archived ? [{ label: "All plans", href: "/plans/all" }] : []), { label: plan.name }]} />
+      <Breadcrumb items={[{ label: "Plans", href: "/plans" }, ...(plan.archived ? [{ label: "All plans", href: "/plans/all" }] : []), { label: plan.name }]} />
       <h1 className="text-3xl">{plan.name}{plan.archived && <span className="ml-3 align-middle text-sm font-semibold text-ink-3">archived</span>}</h1>
       {plan.archived && (
         <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
-          This plan is archived: it&apos;s kept, but not shown on the Plans page or counted in the forecast on Overview.
+          This plan is archived: it&apos;s kept, but not shown on the Plans page or counted in the forecast on Home.
         </p>
       )}
 

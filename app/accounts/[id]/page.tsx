@@ -72,7 +72,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Assets", href: "/accounts" }, { label: account.name }]} />
+      <Breadcrumb items={[{ label: "Assets", href: "/accounts" }, { label: account.name }]} />
       <div>
         <p className="eyebrow">{account.categoryName} · {labelOf(TYPES, account.type)} · {labelOf(LIQUIDITY, account.liquidity)}</p>
         <div className="flex items-center gap-2">
@@ -98,19 +98,27 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
       {h && !investment && (
         <section className="card p-5 sm:p-6">
-          <Figure label={`Balance · ${day(h.lastDate)}`} value={money(h.value, cur)} />
+          <Figure label={`Balance · ${day(h.lastDate)}`} value={money(h.value, cur)} big />
         </section>
       )}
 
       {h && investment && (
-        <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4 sm:p-6">
-          <Figure label="Current value" value={money(h.value, cur)} />
-          <Figure label="Units held" value={units(h.quantity ?? 0)} />
-          <Figure label="Price now" value={h.price === null ? "—" : unitPrice(h.price, cur)} hint={day(h.lastDate)} />
-          <Figure label="Average cost (with fees)" value={h.quantity ? unitPrice(h.cost / h.quantity, cur) : "—"} />
-          <Figure label="Cost of units held" value={money(h.cost, cur)} />
-          <Figure label="Profit / loss" value={signedMoney(h.pl ?? 0, cur)} hint={pct(h.plPct)} cls={tone(h.pl ?? 0)} />
-          <Figure label="Realized from sales" value={signedMoney(h.realized, cur)} cls={tone(h.realized)} />
+        <section className="card p-5 sm:p-6">
+          {/* The two figures that matter first; the rest are a tap away. */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Figure label={`Worth · ${day(h.lastDate)}`} value={money(h.value, cur)} big />
+            <Figure label="Profit / loss" value={signedMoney(h.pl ?? 0, cur)} hint={`${pct(h.plPct)} on what you paid`} cls={tone(h.pl ?? 0)} big />
+            <Figure label="Units held" value={units(h.quantity ?? 0)} />
+          </div>
+          <details className="mt-4 border-t border-line pt-3">
+            <summary className="cursor-pointer text-sm font-semibold text-ink-2">More details</summary>
+            <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Figure label="Price now" value={h.price === null ? "—" : unitPrice(h.price, cur)} hint={day(h.lastDate)} />
+              <Figure label="Average price paid" value={h.quantity ? unitPrice(h.cost / h.quantity, cur) : "—"} hint="fees included" />
+              <Figure label="What you paid in total" value={money(h.cost, cur)} hint="for the units you still hold" />
+              <Figure label="Profit from sales" value={signedMoney(h.realized, cur)} hint="already locked in" cls={tone(h.realized)} />
+            </div>
+          </details>
         </section>
       )}
 
@@ -299,11 +307,11 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
   );
 }
 
-function Figure({ label, value, hint, cls = "" }: { label: string; value: string; hint?: string; cls?: string }) {
+function Figure({ label, value, hint, cls = "", big = false }: { label: string; value: string; hint?: string; cls?: string; big?: boolean }) {
   return (
     <div>
       <p className="eyebrow">{label}</p>
-      <p className={`num text-xl font-bold ${cls}`}>{value}</p>
+      <p className={`num break-words ${big ? "text-2xl font-extrabold" : "text-xl font-bold"} ${cls}`}>{value}</p>
       {hint && <p className={`num text-xs ${cls || "text-ink-3"}`}>{hint}</p>}
     </div>
   );

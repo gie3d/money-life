@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Breadcrumb from "@/components/Breadcrumb";
+import SectionTabs from "@/components/SectionTabs";
 import AccountForm from "@/components/AccountForm";
+import AllocationBars, { type AllocationRow } from "@/components/AllocationBars";
+import Info from "@/components/Info";
 import TrendCell from "@/components/TrendCell";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
-import { day, money } from "@/lib/format";
+import { day, money, pct, signedMoney, tone } from "@/lib/format";
+import { colorFor } from "@/lib/palette";
 import { sixMonthTrend } from "@/lib/trend";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -38,17 +41,37 @@ export default async function AccountsPage() {
     })
     .filter((g) => g.members.length > 0);
 
+  // Where the money sits: value per category or liquidity group, with what the investments in it cost.
+  const counted = held.filter((h) => !h.account.archived);
+  const allocation = (members: typeof held, id: string, label: string, color: string): AllocationRow => {
+    const inv = members.filter((h) => h.investment);
+    return { id, label, color, value: members.reduce((s, h) => s + h.value, 0), cost: inv.length > 0 ? inv.reduce((s, h) => s + h.cost, 0) : null };
+  };
+  const byCategory = groups
+    .map((g) => allocation(counted.filter((h) => h.account.categoryId === g.category.id), String(g.category.id), g.category.name, g.category.color))
+    .filter((r) => r.value !== 0);
+  const byLiquidity = LIQUIDITY
+    .map((l) => allocation(counted.filter((h) => h.account.liquidity === l.id), l.id, l.label, colorFor(l.id, LIQUIDITY)))
+    .filter((r) => r.value !== 0);
+  const invs = counted.filter((h) => h.investment);
+  const invCost = invs.reduce((s, h) => s + h.cost, 0);
+  const invPl = invs.reduce((s, h) => s + h.value, 0) - invCost;
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Assets" }]} />
-      <h1 className="text-3xl">Assets</h1>
+      <SectionTabs section="assets" current="/accounts" />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-3xl">Assets</h1>
+        <Link href="#new-asset" className="btn btn-quiet">+ Add an asset</Link>
+      </div>
       {accounts.length > 0 && (
         <>
-          <p className="text-sm text-ink-3">
-            Total <span className="num font-semibold text-ink">{money(total, cur)}</span> across {active.length} {active.length === 1 ? "asset" : "assets"}
-            {archivedCount > 0 && <> · {archivedCount} archived, not counted</>}
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
+            <span>Total <span className="num font-semibold text-ink">{money(total, cur)}</span> across {active.length} {active.length === 1 ? "asset" : "assets"}</span>
+            {invs.length > 0 && <span>· investments <span className={`num font-semibold ${tone(invPl)}`}>{signedMoney(invPl, cur)} ({pct(invCost > 0 ? invPl / invCost : null)})</span></span>}
+            {archivedCount > 0 && <span>· {archivedCount} archived, not counted</span>}
+            <Info label="About the small charts">Each small chart shows the last 6 months: green for a gain, red for a loss, with money added or taken out set aside. Profit and loss are for investments: their value against what they cost, fees included.</Info>
           </p>
-          <p className="-mt-3 hidden text-xs text-ink-3 sm:block">Each small chart shows the last 6 months: green for a gain, red for a loss, with money added or taken out set aside.</p>
           {groups.map(({ category, members, sum, headTrend }) => (
             <section key={category.id} className="card divide-y divide-line overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
@@ -75,13 +98,19 @@ export default async function AccountsPage() {
                     {trend && <TrendCell trend={trend} name={a.name} />}
                     <div className="w-36 shrink-0 text-right sm:w-44">
                       <p className="num font-semibold">{latest ? money(latest.value, cur) : "Nothing recorded yet"}</p>
-                      {latest && <p className="text-xs text-ink-3">{day(latest.lastDate)}</p>}
+                      {latest && (
+                        <p className="num text-xs text-ink-3">
+                          {latest.pl !== null && <span className={`font-semibold ${tone(latest.pl)}`}>{signedMoney(latest.pl, cur)} · </span>}
+                          {day(latest.lastDate)}
+                        </p>
+                      )}
                     </div>
                   </Link>
                 );
               })}
             </section>
           ))}
+          {byCategory.length > 1 && <AllocationBars byCategory={byCategory} byLiquidity={byLiquidity} currency={cur} />}
         </>
       )}
       <AccountForm categories={categories} />

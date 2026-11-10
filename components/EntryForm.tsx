@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { addEntry } from "@/app/actions/money";
 import DatePicker from "./DatePicker";
 import NumberInput from "./NumberInput";
+import Saved from "./Saved";
 import { money } from "@/lib/format";
 import type { FormState } from "@/app/actions/auth";
 
@@ -18,7 +19,15 @@ const MODES: { id: Mode; label: string }[] = [
  * Records a balance: the new total, or an amount put in or taken out, which is added to or taken from the balance
  * as of that date. `entries` are the balances already recorded, to preview the new total.
  */
-export default function EntryForm({ accountId, currency, entries }: { accountId: number; currency: string; entries: { date: string; value: number }[] }) {
+export default function EntryForm({ accountId, currency, entries, initialMode = "balance", title = "Record a balance", after }: {
+  accountId: number;
+  currency: string;
+  entries: { date: string; value: number }[];
+  initialMode?: "balance" | "deposit" | "withdraw";
+  title?: string;
+  /** Shown with the "Saved" note, such as links on to what comes next. */
+  after?: ReactNode;
+}) {
   // The fields hold their own state, so a saved balance is cleared by starting them afresh.
   const [fresh, setFresh] = useState(0);
   const [state, action, pending] = useActionState<FormState, FormData>(async (prev, form) => {
@@ -29,16 +38,17 @@ export default function EntryForm({ accountId, currency, entries }: { accountId:
 
   return (
     <form action={action} className="card space-y-4 p-5 sm:p-6">
-      <h2 className="text-lg">Record a balance</h2>
-      <Fields key={fresh} currency={currency} entries={entries} />
+      <h2 className="text-lg">{title}</h2>
+      {fresh > 0 && !pending && !state?.error && <Saved key={fresh}>{after}</Saved>}
+      <Fields key={fresh} currency={currency} entries={entries} initialMode={initialMode} />
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
-      <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save balance"}</button>
+      <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
     </form>
   );
 }
 
-function Fields({ currency, entries }: { currency: string; entries: { date: string; value: number }[] }) {
-  const [mode, setMode] = useState<Mode>("balance");
+function Fields({ currency, entries, initialMode }: { currency: string; entries: { date: string; value: number }[]; initialMode: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [date, setDate] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -49,7 +59,7 @@ function Fields({ currency, entries }: { currency: string; entries: { date: stri
 
   return (
     <>
-      <fieldset className="flex gap-2">
+      <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Set the balance, or add or take out an amount</legend>
         {MODES.map((m) => (
           <label key={m.id} className="cursor-pointer">

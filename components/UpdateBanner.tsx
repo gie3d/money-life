@@ -37,7 +37,7 @@ export default function UpdateBanner({ version }: { version: string }) {
 
   if (!stale || hidden) return null;
   return (
-    <div role="status" className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-lg items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-surface shadow-xl [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))]">
+    <div role="status" className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 lg:bottom-3 mx-auto flex max-w-lg items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-surface shadow-xl lg:[padding-bottom:max(0.75rem,env(safe-area-inset-bottom))]">
       <p className="min-w-0 flex-1 font-semibold">A newer version is available. Reload to get it.</p>
       <button onClick={() => window.location.reload()} className="shrink-0 rounded-full bg-brand px-4 py-1.5 font-bold text-white">Reload</button>
       <button onClick={() => setHidden(true)} aria-label="Dismiss" className="shrink-0 px-1 text-lg leading-none opacity-70">×</button>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Breadcrumb from "@/components/Breadcrumb";
+import SectionTabs from "@/components/SectionTabs";
 import ChartToggle from "@/components/ChartToggle";
 import NetWorthChart from "@/components/NetWorthChart";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
@@ -27,11 +27,11 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
   if (rows.length === 0) {
     return (
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-        <Breadcrumb items={[{ label: "Performance" }]} />
+        <SectionTabs section="assets" current="/performance" />
         <div className="card p-8 text-center">
           <h1 className="text-2xl">Nothing to measure yet</h1>
           <p className="mx-auto mt-2 max-w-md text-ink-3">Add an asset and record what it is worth from time to time; how it performs shows up here.</p>
-          <Link href="/accounts" className="btn mt-6">Add your first asset</Link>
+          <Link href="/welcome" className="btn mt-6">Set up my assets</Link>
         </div>
       </div>
     );
@@ -104,7 +104,7 @@ export default async function PerformancePage({ searchParams }: PageProps<"/perf
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div>
-        <Breadcrumb items={[{ label: "Performance" }]} />
+        <SectionTabs section="assets" current="/performance" />
         <h1 className="mt-2 text-3xl">Performance</h1>
         <p className="mt-1 text-sm text-ink-3">How your assets did over a range or a calendar year, with money you put in or took out set aside.</p>
       </div>

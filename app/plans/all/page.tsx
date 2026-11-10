@@ -19,7 +19,7 @@ export default async function AllPlansPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Plans", href: "/plans" }, { label: "All plans" }]} />
+      <Breadcrumb items={[{ label: "Plans", href: "/plans" }, { label: "All plans" }]} />
       <div>
         <h1 className="text-3xl">All plans</h1>
         <p className="mt-1 text-sm text-ink-3">Active and archived. Archived plans are kept but don&apos;t show on the Plans page or count in the forecast.</p>

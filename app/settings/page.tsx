@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Settings" }]} />
+      <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Settings" }]} />
       <h1 className="text-3xl">Settings</h1>
 
       <section className="card flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">

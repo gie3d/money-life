@@ -36,18 +36,18 @@ export default async function UpdateValuesPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Overview", href: "/" }, { label: "Update values" }]} />
+      <Breadcrumb items={[{ label: "Record", href: "/record" }, { label: "Update balances and prices" }]} />
       <div>
-        <h1 className="text-3xl">Update values</h1>
+        <h1 className="text-3xl">Update balances and prices</h1>
         <p className="mt-1 text-sm text-ink-3">
           Type today&apos;s price for investments and today&apos;s balance for cash and saving; each row shows what the asset will be worth.
-          Leave a box empty to keep it as it is. To record a deposit, withdrawal, buy or sell, use the asset&apos;s own page.
+          Leave a box empty to keep it as it is. For a deposit, withdrawal, buy or sale, use <Link href="/record" className="font-semibold text-brand">Record</Link>.
         </p>
       </div>
       {rows.length === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-ink-3">No assets to update yet.</p>
-          <Link href="/accounts" className="btn mt-4">Add an asset</Link>
+          <Link href="/welcome" className="btn mt-4">Set up my assets</Link>
         </div>
       ) : (
         <UpdateValues rows={rows} currency={user.currency} />
