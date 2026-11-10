@@ -1,8 +1,9 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { axisDate, compactMoney, day, spansYears, signedMoney } from "@/lib/format";
+import { axisDate, compactMoney, day, spansYears, signedMoney, tone } from "@/lib/format";
 import type { Point } from "@/lib/performance";
+import { RangeLabel, rangeBrush, useRange } from "./RangeBrush";
 import FullscreenButton from "./FullscreenButton";
 import TradingChart from "./TradingChart";
 
@@ -10,13 +11,16 @@ const compact = compactMoney;
 
 /** Profit (value minus cost) against date: green above zero, red below. */
 export default function ProfitChart({ data, currency, title }: { data: Point[]; currency: string; title: string }) {
+  const range = useRange(data.length);
   if (data.length < 2) {
     return <p className="py-16 text-center text-sm text-ink-3">Add a second trade or price to see profit over time.</p>;
   }
   const long = spansYears(data);
   const rows = data.map((p) => ({ date: p.date, profit: p.value - p.cost }));
-  const hi = Math.max(...rows.map((r) => r.profit));
-  const lo = Math.min(...rows.map((r) => r.profit));
+  // The colour split and the axis follow the window being shown, not the whole series.
+  const seen = rows.slice(range.start, range.end + 1);
+  const hi = Math.max(...seen.map((r) => r.profit));
+  const lo = Math.min(...seen.map((r) => r.profit));
   // Where zero falls in the plotted range, so the colour flips exactly at the zero line.
   const zero = hi <= 0 ? 0 : lo >= 0 ? 1 : hi / (hi - lo);
 
@@ -27,7 +31,8 @@ export default function ProfitChart({ data, currency, title }: { data: Point[]; 
           <TradingChart data={data} currency={currency} profit />
         </FullscreenButton>
       </div>
-      <div className="h-64 w-full" role="img" aria-label="Profit over time">
+      <RangeLabel from={day(data[range.start].date)} to={day(data[range.end].date)} range={range} length={data.length} />
+      <div className="h-80 w-full" role="img" aria-label="Profit over time">
         <ResponsiveContainer>
           <AreaChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
@@ -42,10 +47,11 @@ export default function ProfitChart({ data, currency, title }: { data: Point[]; 
             <ReferenceLine y={0} stroke="var(--ink-3)" />
             <Tooltip
               labelFormatter={(d) => day(String(d))}
-              formatter={(v) => [signedMoney(Number(v), currency), "Profit"]}
+              formatter={(v) => [<span key="p" className={tone(Number(v))}>{signedMoney(Number(v), currency)}</span>, "Profit"]}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
             />
             <Area type="stepAfter" dataKey="profit" stroke="url(#profit-split)" strokeWidth={2.5} fill="url(#profit-split)" fillOpacity={0.18} baseValue={0} />
+            {rangeBrush({ rows, dataKey: "date", keys: ["profit"], range, format: (d) => day(d), type: "stepAfter" })}
           </AreaChart>
         </ResponsiveContainer>
       </div>

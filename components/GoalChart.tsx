@@ -1,7 +1,9 @@
 "use client";
 
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, Area } from "recharts";
-import { axisDate, compactMoney, dayWithAge, money, pct, signedMoney, tone } from "@/lib/format";
+import { SignGradient, signStroke, signSwatch } from "./Sign";
+import { RangeLabel, rangeBrush, useRange } from "./RangeBrush";
+import { axisDate, day, compactMoney, dayWithAge, money, pct, signedMoney, tone } from "@/lib/format";
 
 export type GoalPoint = { date: string; planned: number | null; actual: number | null; projected: number | null };
 const NAMES: Record<string, string> = { planned: "Plan", actual: "Actual", projected: "Carrying on as planned" };
@@ -20,7 +22,7 @@ function GoalTooltip({ active, payload, currency, birthDate }: {
     <div className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink shadow-lg">
       <p className="mb-1.5">{dayWithAge(pt.date, birthDate)}</p>
       {lines.map((k) => (
-        <p key={k} className="num flex justify-between gap-6" style={{ color: COLORS[k] }}>
+        <p key={k} className={`num flex justify-between gap-6 ${k === "planned" ? "" : tone(pt[k]!)}`} style={k === "planned" ? { color: COLORS[k] } : undefined}>
           <span>{NAMES[k]}</span><span>{money(pt[k]!, currency)}</span>
         </p>
       ))}
@@ -40,22 +42,23 @@ export default function GoalChart({ points, target, today, currency, birthDate }
   /** Shown as an age next to each date on hover, for a retirement goal. */
   birthDate?: string | null;
 }) {
+  const range = useRange(points.length);
   return (
     <div className="space-y-3">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
-        <li className="flex items-center gap-2"><span className="h-1 w-5 rounded-full bg-brand" />Actual</li>
+        <li className="flex items-center gap-2"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Actual</li>
         <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-ink-3" />Plan</li>
-        <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-sky" />Carrying on as planned</li>
+        <li className="flex items-center gap-2"><span className={`h-0.5 w-5 ${signSwatch}`} />Carrying on as planned</li>
         <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-go" />Target</li>
       </ul>
-      <div className="h-72 w-full" role="img" aria-label="The goal's plan against what actually happened, with the target">
+      <RangeLabel from={day(points[range.start].date)} to={day(points[range.end].date)} range={range} length={points.length} />
+      <div className="h-96 w-full" role="img" aria-label="The goal's plan against what actually happened, with the target">
         <ResponsiveContainer>
           <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id="goal-actual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.25} />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
-              </linearGradient>
+              {(["actual", "projected"] as const).map((k) => (
+                <SignGradient key={k} id={`goal-${k}`} values={points.slice(range.start, range.end + 1).map((p) => p[k])} />
+              ))}
             </defs>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="date" tickFormatter={(d: string) => axisDate(d, true)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
@@ -64,8 +67,9 @@ export default function GoalChart({ points, target, today, currency, birthDate }
             <ReferenceLine x={today} stroke="var(--ink-3)" strokeDasharray="2 3" />
             <Tooltip content={<GoalTooltip currency={currency} birthDate={birthDate} />} />
             <Line type="linear" dataKey="planned" stroke="var(--ink-3)" strokeWidth={1.75} strokeDasharray="5 4" dot={false} />
-            <Area type="linear" dataKey="actual" stroke="var(--brand)" strokeWidth={2.5} fill="url(#goal-actual)" connectNulls={false} />
-            <Line type="linear" dataKey="projected" stroke="var(--sky)" strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />
+            <Area type="linear" dataKey="actual" stroke={signStroke("goal-actual", points.slice(range.start, range.end + 1).map((p) => p.actual))} strokeWidth={2.5} fill="url(#goal-actual)" fillOpacity={0.18} connectNulls={false} />
+            <Line type="linear" dataKey="projected" stroke={signStroke("goal-projected", points.slice(range.start, range.end + 1).map((p) => p.projected))} strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />
+            {rangeBrush({ rows: points, dataKey: "date", keys: ["planned", "actual", "projected"], range, format: (d) => axisDate(d, true) })}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

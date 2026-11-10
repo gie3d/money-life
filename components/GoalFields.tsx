@@ -5,6 +5,8 @@ import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveCont
 import type { TickAsset } from "./AssetTicks";
 import DatePicker from "./DatePicker";
 import NumberInput from "./NumberInput";
+import { SignGradient, signStroke, signSwatch, toned } from "./Sign";
+import { RangeLabel, rangeBrush, useRange } from "./RangeBrush";
 import { axisDate, compactMoney, day, dayWithAge, money, pct, plainNumber } from "@/lib/format";
 import { LIFE_END_AGE, path, reachDate, requiredMonthly, retirementPath, targetValue, type Plan } from "@/lib/goals";
 import { groupBy } from "@/lib/group";
@@ -80,6 +82,7 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
     ...points.map((p, i) => ({ date: p.date, savings: p.value, paidIn: now + p.contributed, ...(showRetired && i === points.length - 1 ? { retired: p.value } : {}) })),
     ...retired.slice(1).map((p) => ({ date: p.date, retired: p.value })),
   ];
+  const range = useRange(chart.length);
 
   const pctInput = (name: string, label: string, key: keyof typeof f, hint?: string) => (
     <label className="block space-y-1.5">
@@ -190,19 +193,19 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
         {ready ? (
           <>
             <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
-              <li className="flex items-center gap-2"><span className="h-1 w-5 rounded-full bg-brand" />Savings</li>
+              <li className="flex items-center gap-2"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Savings</li>
               <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-ink-3" />Money put in</li>
-              {showRetired && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-sky" />After retiring</li>}
+              {showRetired && <li className="flex items-center gap-2"><span className={`h-0.5 w-5 ${signSwatch}`} />After retiring</li>}
               <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-go" />Target</li>
             </ul>
-            <div className="h-72 w-full" role="img" aria-label="Savings growing towards the target, then spent down in retirement">
+            <RangeLabel from={day(chart[range.start].date)} to={day(chart[range.end].date)} range={range} length={chart.length} />
+            <div className="h-96 w-full" role="img" aria-label="Savings growing towards the target, then spent down in retirement">
               <ResponsiveContainer>
                 <ComposedChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="goal-savings" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
-                    </linearGradient>
+                    {(["savings", "retired"] as const).map((k) => (
+                      <SignGradient key={k} id={`form-${k}`} values={chart.slice(range.start, range.end + 1).map((p) => p[k])} />
+                    ))}
                   </defs>
                   <CartesianGrid stroke="var(--line)" vertical={false} />
                   <XAxis dataKey="date" tickFormatter={(d: string) => axisDate(d, true)} tick={{ fill: "var(--ink-3)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={40} />
@@ -210,13 +213,14 @@ export default function GoalFields({ currency, assets, goal, plan, today }: {
                   <ReferenceLine y={target} stroke="var(--go)" strokeWidth={2} />
                   <Tooltip
                     labelFormatter={(d) => dayWithAge(String(d), kind === "retirement" ? birth : null)}
-                    formatter={(v, name) => [money(Number(v), currency), name === "savings" ? "Savings" : name === "retired" ? "After retiring" : "Money put in"]}
+                    formatter={(v, name) => [name === "paidIn" ? money(Number(v), currency) : toned(Number(v), currency), name === "savings" ? "Savings" : name === "retired" ? "After retiring" : "Money put in"]}
                     contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
                   />
-                  <Area type="monotone" dataKey="savings" stroke="var(--brand)" strokeWidth={2.5} fill="url(#goal-savings)" />
+                  <Area type="monotone" dataKey="savings" stroke={signStroke("form-savings", chart.slice(range.start, range.end + 1).map((p) => p.savings))} strokeWidth={2.5} fill="url(#form-savings)" fillOpacity={0.18} />
                   {showRetired && <ReferenceLine x={goalDate} stroke="var(--ink-3)" strokeDasharray="2 3" />}
-                  <Line type="monotone" dataKey="retired" stroke="var(--sky)" strokeWidth={2.5} strokeDasharray="1 4" strokeLinecap="round" dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="retired" stroke={signStroke("form-retired", chart.slice(range.start, range.end + 1).map((p) => p.retired))} strokeWidth={2.5} strokeDasharray="1 4" strokeLinecap="round" dot={false} connectNulls={false} />
                   <Line type="monotone" dataKey="paidIn" stroke="var(--ink-3)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                  {rangeBrush({ rows: chart, dataKey: "date", keys: showRetired ? ["savings", "paidIn", "retired"] : ["savings", "paidIn"], range, format: (d) => axisDate(d, true), type: "monotone" })}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
