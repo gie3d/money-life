@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -238,4 +238,24 @@ export async function listGoalVersions(userId: number, goalId?: number): Promise
       accountId: Number(a.account_id), startValue: Number(a.start_value), rate: Number(a.expected_return), monthly: Number(a.monthly_contribution),
     })),
   }));
+}
+
+const toJournal = (r: Record<string, unknown>): JournalEntry => ({
+  id: Number(r.id), date: r.entry_date as string, title: r.title as string, mood: (r.mood as string | null) ?? null, body: r.body as string,
+  accountIds: ((r.account_ids as string[] | null) ?? []).map(Number),
+});
+
+const JOURNAL_SELECT = `SELECT e.id, e.entry_date::text AS entry_date, e.title, e.mood, e.body,
+  COALESCE(array_agg(ea.account_id ORDER BY ea.account_id) FILTER (WHERE ea.account_id IS NOT NULL), '{}') AS account_ids
+  FROM journal_entries e LEFT JOIN journal_entry_assets ea ON ea.entry_id = e.id`;
+
+/** The user's journal, newest first. */
+export async function listJournal(userId: number): Promise<JournalEntry[]> {
+  const { rows } = await pool.query(`${JOURNAL_SELECT} WHERE e.user_id = $1 GROUP BY e.id ORDER BY e.entry_date DESC, e.id DESC`, [userId]);
+  return rows.map(toJournal);
+}
+
+export async function getJournalEntry(userId: number, id: number): Promise<JournalEntry | null> {
+  const { rows } = await pool.query(`${JOURNAL_SELECT} WHERE e.id = $1 AND e.user_id = $2 GROUP BY e.id`, [id, userId]);
+  return rows[0] ? toJournal(rows[0]) : null;
 }

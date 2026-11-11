@@ -208,3 +208,23 @@ export type GoalVersion = {
   /** Each asset's own start value, expected yearly rate and monthly amount; empty for a plan made as one pot. */
   assets: { accountId: number; startValue: number; rate: number; monthly: number }[];
 };
+
+/** The moods an entry can be marked with, from good to hard. */
+export const MOODS = [
+  { id: "great", emoji: "😄", label: "Great" },
+  { id: "good", emoji: "🙂", label: "Good" },
+  { id: "okay", emoji: "😐", label: "Okay" },
+  { id: "worried", emoji: "😟", label: "Worried" },
+  { id: "hard", emoji: "😣", label: "Hard" },
+] as const;
+
+export type JournalEntry = {
+  id: number;
+  date: string;
+  title: string;
+  mood: string | null;
+  /** Markdown. */
+  body: string;
+  /** The assets it is about; none means everything. */
+  accountIds: number[];
+};

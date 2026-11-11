@@ -64,6 +64,7 @@ function SectionIcon({ id }: { id: SectionId | "settings" }) {
       {id === "home" && <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></>}
       {id === "assets" && <><path d="M3 20h18" /><path d="M6 16V10" /><path d="M11 16V6" /><path d="M16 16v-4" /><path d="M20 16V8" /></>}
       {id === "future" && <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" /></>}
+      {id === "journal" && <><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" /><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3" /><path d="M9 7.5h6M9 11h4" /></>}
       {id === "settings" && <><circle cx="12" cy="12" r="3" /><path d={GEAR} /></>}
     </svg>
   );
@@ -123,6 +124,8 @@ export default function Nav({ userName }: { userName: string | null }) {
         </div>
       </header>
 
+      {userName && <JournalButton active={section === "journal"} />}
+
       {/* On a phone the sections sit in a bar at the bottom, in reach of a thumb, with Record in the middle. */}
       {userName && (
         <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden [padding-bottom:env(safe-area-inset-bottom)]">
@@ -140,6 +143,27 @@ export default function Nav({ userName }: { userName: string | null }) {
         </nav>
       )}
     </>
+  );
+}
+
+/** On a phone: a small round button at the bottom right that opens the Journal menu. */
+function JournalButton({ active }: { active: boolean }) {
+  const [open, setOpen] = useState(false);
+  const item = "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-surface-2";
+  return (
+    <div className="fixed right-4 z-20 lg:hidden [bottom:calc(5rem+env(safe-area-inset-bottom))]">
+      {open && <button type="button" aria-label="Close the Journal menu" onClick={() => setOpen(false)} className="fixed inset-0 -z-10 cursor-default" />}
+      {open && (
+        <div role="menu" className="absolute bottom-14 right-0 w-52 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
+          <Link href="/journal" role="menuitem" onClick={() => setOpen(false)} className={item}>Your journal</Link>
+          <Link href="/journal/new" role="menuitem" onClick={() => setOpen(false)} className={item}>Write a new entry</Link>
+        </div>
+      )}
+      <button type="button" aria-label="Journal" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+        className={`grid size-11 place-items-center rounded-full shadow-lg ring-2 ring-ground active:scale-95 ${active || open ? "bg-brand text-white" : "bg-surface text-ink-2"}`}>
+        <SectionIcon id="journal" />
+      </button>
+    </div>
   );
 }
 

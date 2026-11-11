@@ -4,6 +4,17 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.2.0] - 2026-11-11
+
+### Journal
+- A new **Journal** tab, next to Future (on a phone, a small round button at the bottom right opens its menu): write down how a period of life feels, in Markdown with a preview, with a date,
+  a title and an optional mood. Each entry shows what everything you had was worth on its date, so you can look back
+  and remember both.
+
+### Home
+- Each goal on Home now has a small chart: the last 6 months and the next 3 years, with your actual value, the plan
+  and where carrying on as planned leads. Hover it for the values and how far you are from the plan.
+
 ## [1.1.0] - 2026-11-11
 
 ### Easier to find your way

@@ -1,8 +1,8 @@
 /**
- * The app's three sections and the pages under each. The top bar (and the bottom bar on a phone) shows the sections;
+ * The app's sections and the pages under each. The top bar (and the bottom bar on a phone) shows the sections;
  * a section with more than one page shows them as tabs at the top of each.
  */
-export type SectionId = "home" | "assets" | "future";
+export type SectionId = "home" | "assets" | "future" | "journal";
 
 export type SubPage = { href: string; label: string; hint: string };
 
@@ -27,11 +27,14 @@ export const SECTIONS: { id: SectionId; href: string; label: string; pages: SubP
       { href: "/bills", label: "Bills", hint: "Paying every month" },
     ],
   },
+  // Not a tab group: on a phone it isn't in the bottom bar but behind a small button (see Nav).
+  { id: "journal", href: "/journal", label: "Journal", pages: [] },
 ];
 
 /** The section a path belongs to, if any. */
 export function sectionOf(pathname: string): SectionId | null {
   if (pathname === "/") return "home";
+  if (pathname === "/journal" || pathname.startsWith("/journal/")) return "journal";
   for (const s of SECTIONS) if (s.pages.some((p) => pathname === p.href || pathname.startsWith(`${p.href}/`))) return s.id;
   return null;
 }
