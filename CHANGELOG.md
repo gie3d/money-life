@@ -4,6 +4,21 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.3.0] - 2026-11-12
+
+### Spending
+- A new **Spending** tab, between Assets and Future, with two pages:
+  - **Everyday**: once a month, type what each category came to (from your other app or bank statement), with last
+    month's amount beside each box and a button to fill empty ones from it. See the month's total against last month
+    and the average of the months before, where it went, the last 12 months by category, and a table of each
+    category over the last 6 months, with a small chart of its last 12 months on each row to show the trend.
+  - **Hobbies**: trips, gadgets and the things you love, year by year. See this year against last year (and the
+    same part of last year), the average of the years before, a chart of every year by hobby, and a table of each
+    hobby year by year. Each thing can have a note on how it felt to spend on it, shown under it in the list.
+- Everyday categories are your own list: start from a suggested set or from nothing, then add, rename, reorder or
+  remove them. A removed category keeps its past months and can be put back.
+- Hobbies are free text: type any name, or tap one you've used.
+
 ## [1.2.0] - 2026-11-11
 
 ### Journal

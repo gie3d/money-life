@@ -63,6 +63,7 @@ function SectionIcon({ id }: { id: SectionId | "settings" }) {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {id === "home" && <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /><path d="M10 20v-5h4v5" /></>}
       {id === "assets" && <><path d="M3 20h18" /><path d="M6 16V10" /><path d="M11 16V6" /><path d="M16 16v-4" /><path d="M20 16V8" /></>}
+      {id === "spending" && <><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M3 10h18" /><path d="M16 14.5h2" /><path d="M7 6V4.5h10V6" /></>}
       {id === "future" && <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" /></>}
       {id === "journal" && <><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" /><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3" /><path d="M9 7.5h6M9 11h4" /></>}
       {id === "settings" && <><circle cx="12" cy="12" r="3" /><path d={GEAR} /></>}

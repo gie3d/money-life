@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlySpending, Spending, SpendingCategory, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -258,4 +258,34 @@ export async function listJournal(userId: number): Promise<JournalEntry[]> {
 export async function getJournalEntry(userId: number, id: number): Promise<JournalEntry | null> {
   const { rows } = await pool.query(`${JOURNAL_SELECT} WHERE e.id = $1 AND e.user_id = $2 GROUP BY e.id`, [id, userId]);
   return rows[0] ? toJournal(rows[0]) : null;
+}
+
+/** What the user has spent on hobbies, newest first. */
+export async function listHobbySpending(userId: number): Promise<Spending[]> {
+  const { rows } = await pool.query(
+    `SELECT id, spent_on::text AS spent_on, amount, category, name, note FROM spendings
+     WHERE user_id = $1 AND kind = 'hobby' ORDER BY spent_on DESC, id DESC`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id), date: r.spent_on as string, amount: Number(r.amount), category: r.category as string, name: (r.name as string | null) ?? null,
+    note: (r.note as string | null) ?? null,
+  }));
+}
+
+/** The user's everyday categories in their own order, archived ones included. */
+export async function listSpendingCategories(userId: number): Promise<SpendingCategory[]> {
+  const { rows } = await pool.query(
+    "SELECT id, name, position, archived FROM spending_categories WHERE user_id = $1 ORDER BY position, id", [userId]);
+  return rows.map((r) => ({ id: Number(r.id), name: r.name as string, position: Number(r.position), archived: r.archived as boolean }));
+}
+
+/** Every month's amount of every everyday category. */
+export async function listMonthlySpending(userId: number): Promise<MonthlySpending[]> {
+  const { rows } = await pool.query(
+    `SELECT m.category_id, to_char(m.month, 'YYYY-MM') AS month, m.amount
+     FROM monthly_spending m JOIN spending_categories c ON c.id = m.category_id WHERE c.user_id = $1 ORDER BY m.month`,
+    [userId],
+  );
+  return rows.map((r) => ({ categoryId: Number(r.category_id), month: r.month as string, amount: Number(r.amount) }));
 }

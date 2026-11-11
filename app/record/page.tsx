@@ -97,6 +97,7 @@ export default async function RecordPage({ searchParams }: PageProps<"/record">)
         </ul>
         <p className="text-sm text-ink-3">
           Something new? <Link href="/accounts#new-asset" className="font-semibold text-brand">Add an asset</Link>
+          {" "}· Spending this month? Add it under <Link href="/spending" className="font-semibold text-brand">Spending</Link>
           {" "}· To correct what an investment holds, open it from <Link href="/accounts" className="font-semibold text-brand">Assets</Link>.
         </p>
       </Shell>

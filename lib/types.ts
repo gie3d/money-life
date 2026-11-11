@@ -228,3 +228,22 @@ export type JournalEntry = {
   /** The assets it is about; none means everything. */
   accountIds: number[];
 };
+
+/** A category of everyday spending, the user's own. An archived one is off the list but keeps its past months. */
+export type SpendingCategory = { id: number; name: string; position: number; archived: boolean };
+
+/** What one everyday category came to in one month ("2026-11"). */
+export type MonthlySpending = { categoryId: number; month: string; amount: number };
+
+/** Something spent on a hobby: a trip, a gadget, gear. */
+export type Spending = {
+  id: number;
+  date: string;
+  amount: number;
+  /** The hobby, e.g. Travel. */
+  category: string;
+  /** What it was, e.g. Trip to Japan. */
+  name: string | null;
+  /** How it felt to spend on it; plain text, line breaks kept. */
+  note: string | null;
+};

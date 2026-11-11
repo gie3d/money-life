@@ -2,7 +2,7 @@
  * The app's sections and the pages under each. The top bar (and the bottom bar on a phone) shows the sections;
  * a section with more than one page shows them as tabs at the top of each.
  */
-export type SectionId = "home" | "assets" | "future" | "journal";
+export type SectionId = "home" | "assets" | "spending" | "future" | "journal";
 
 export type SubPage = { href: string; label: string; hint: string };
 
@@ -15,6 +15,15 @@ export const SECTIONS: { id: SectionId; href: string; label: string; pages: SubP
     pages: [
       { href: "/accounts", label: "Assets", hint: "What you own" },
       { href: "/performance", label: "Performance", hint: "How it's done" },
+    ],
+  },
+  {
+    id: "spending",
+    href: "/spending",
+    label: "Spending",
+    pages: [
+      { href: "/spending", label: "Everyday", hint: "Daily life, by month" },
+      { href: "/spending/hobbies", label: "Hobbies", hint: "Trips & gadgets, by year" },
     ],
   },
   {
