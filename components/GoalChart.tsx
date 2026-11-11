@@ -10,7 +10,7 @@ const NAMES: Record<string, string> = { planned: "Plan", actual: "Actual", proje
 const COLORS: Record<string, string> = { planned: "var(--ink-3)", actual: "var(--brand)", projected: "var(--sky)" };
 
 /** The hover box: each line's value, then how far the actual (or, from today on, the projection) is from the plan. */
-function GoalTooltip({ active, payload, currency, birthDate }: {
+export function GoalTooltip({ active, payload, currency, birthDate }: {
   active?: boolean; payload?: { payload: GoalPoint }[]; currency: string; birthDate?: string | null;
 }) {
   const pt = payload?.[0]?.payload;

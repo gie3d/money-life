@@ -1,10 +1,11 @@
 import Link from "next/link";
 import ForecastChart from "@/components/ForecastChart";
+import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
 import StaleNotice from "@/components/StaleNotice";
 import { listAccounts, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { goalAssets } from "@/lib/goal-data";
-import { monthsBetween, path, standing, targetValue, valuesOn } from "@/lib/goals";
+import { monthsBetween, path, standing, targetValue, valueOn, valuesOn } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
@@ -80,8 +81,21 @@ export default async function Home() {
     const final = addMonths(today, 36) >= plan.targetDate;
     const k = final ? n : Math.min(n, monthsBetween(plan.startDate, addMonths(today, 36)));
     const date = final ? plan.targetDate : addMonths(today, 36);
+    // One point a month, from six months back to the mark: the plan's path throughout, your actual value up to today,
+    // and from today on, that value carried on as planned.
+    const carry = path(plan, s.k, nowBy, Math.max(k, s.k));
+    const from = addMonths(today, -6);
+    const chart: MiniPoint[] = path(plan, 0, undefined, Math.max(k, s.k))
+      .filter((q) => q.date >= from)
+      .map((q) => ({
+        date: q.date, planned: q.value,
+        actual: q.date <= today ? valueOn(glists, q.date) : null,
+        projected: q.k >= s.k ? (carry.find((c) => c.k === q.k)?.value ?? null) : null,
+      }));
+    const at = chart.findIndex((q) => q.date > today);
+    chart.splice(at < 0 ? chart.length : at, 0, { date: today, planned: s.planned, actual: s.actual, projected: s.actual });
     return [{
-      goal: g, plan, s, final, date,
+      goal: g, plan, s, final, date, chart,
       milestone: final ? targetValue(plan) : path(plan, 0, undefined, k).at(-1)!.value,
       onTrack: path(plan, s.k, nowBy, Math.max(k, s.k)).at(-1)!.value,
     }];
@@ -181,14 +195,14 @@ export default async function Home() {
             <Link href="/goals" className="text-sm font-semibold text-brand">All goals →</Link>
           </div>
           <ul className="divide-y divide-line">
-            {goalCards.map(({ goal, s, final, date, milestone, onTrack }) => {
+            {goalCards.map(({ goal, s, final, date, milestone, onTrack, chart }) => {
               const share = milestone > 0 ? Math.min(1, s.actual / milestone) : 0;
               const ok = onTrack >= milestone;
               return (
                 <li key={goal.id}>
                   <Link href={`/goals/${goal.id}`} className="-mx-2 block space-y-2 rounded-xl px-2 py-3 hover:bg-surface-2">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="min-w-0 truncate font-semibold">{goal.name}</p>
+                      <p className="min-w-0 truncate font-semibold">{goal.name}<span className="font-normal text-ink-3"> · {final ? `last 6 months to ${day(date)}` : "last 6 months and next 3 years"}</span></p>
                       <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${ok ? "bg-go-soft text-go-text" : "bg-miss-soft text-miss-text"}`}>
                         {ok ? "On track ✓" : `${money(milestone - onTrack, cur)} short`}
                       </span>
@@ -198,6 +212,12 @@ export default async function Home() {
                     </div>
                     <p className="num text-xs text-ink-3">
                       {money(s.actual, cur)} of {money(milestone, cur)} · {final ? "target" : "3-year mark"} {day(date)}
+                    </p>
+                    <GoalMiniChart points={chart} today={today} currency={cur} label={`${goal.name}: your value against the plan until ${day(date)}`} />
+                    <p className="flex gap-4 text-xs text-ink-3">
+                      <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-brand" />Actual</span>
+                      <span className="flex items-center gap-1.5"><span className="w-4 border-t-2 border-dotted border-brand" />Carrying on</span>
+                      <span className="flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed border-ink-3" />Target</span>
                     </p>
                   </Link>
                 </li>
