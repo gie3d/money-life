@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { isRecordPath, SECTIONS, sectionOf, type SectionId } from "@/lib/sections";
 
 const THEME_EVENT = "ml-theme-change";
@@ -124,55 +124,42 @@ export default function Nav({ userName }: { userName: string | null }) {
         </div>
       </header>
 
-      {userName && <JournalButton active={section === "journal"} />}
-
-      {/* On a phone the sections sit in a bar at the bottom, in reach of a thumb, with Record in the middle. */}
-      {userName && (
-        <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden [padding-bottom:env(safe-area-inset-bottom)]">
-          <div className="mx-auto grid h-16 max-w-lg grid-cols-5 items-center px-2">
-            {SECTIONS.slice(0, 2).map((s) => <BarLink key={s.id} href={s.href} label={s.label} active={section === s.id} icon={<SectionIcon id={s.id} />} />)}
-            <div className="grid place-items-center">
-              <Link href="/record" aria-label="Record" aria-current={recording ? "page" : undefined}
-                className="grid size-13 -translate-y-3 place-items-center rounded-full bg-brand text-white shadow-lg ring-4 ring-ground active:scale-95">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-              </Link>
-            </div>
-            <BarLink href={SECTIONS[2].href} label={SECTIONS[2].label} active={section === "future"} icon={<SectionIcon id="future" />} />
-            <BarLink href="/settings" label="Settings" active={onSettings} icon={<SectionIcon id="settings" />} />
-          </div>
-        </nav>
-      )}
+      {userName && <MenuButton section={section} onSettings={onSettings} recording={recording} />}
     </>
   );
 }
 
-/** On a phone: a small round button at the bottom right that opens the Journal menu. */
-function JournalButton({ active }: { active: boolean }) {
+/**
+ * On a phone there is no bar: one round button at the bottom right holds everything. Pressed, it opens a menu with
+ * Record first, then each section and Settings.
+ */
+function MenuButton({ section, onSettings, recording }: { section: SectionId | null; onSettings: boolean; recording: boolean }) {
   const [open, setOpen] = useState(false);
-  const item = "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-surface-2";
+  const row = (on: boolean) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold ${on ? "bg-brand-soft text-brand" : "text-ink hover:bg-surface-2"}`;
+  const close = () => setOpen(false);
   return (
-    <div className="fixed right-4 z-20 lg:hidden [bottom:calc(5rem+env(safe-area-inset-bottom))]">
-      {open && <button type="button" aria-label="Close the Journal menu" onClick={() => setOpen(false)} className="fixed inset-0 -z-10 cursor-default" />}
+    <div className="fixed right-4 z-40 lg:hidden [bottom:calc(1rem+env(safe-area-inset-bottom))]">
+      {open && <button type="button" aria-label="Close the menu" onClick={close} className="fixed inset-0 -z-10 cursor-default bg-black/30" />}
       {open && (
-        <div role="menu" className="absolute bottom-14 right-0 w-52 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
-          <Link href="/journal" role="menuitem" onClick={() => setOpen(false)} className={item}>Your journal</Link>
-          <Link href="/journal/new" role="menuitem" onClick={() => setOpen(false)} className={item}>Write a new entry</Link>
-        </div>
+        <nav aria-label="Menu" className="absolute bottom-16 right-0 w-56 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
+          <Link href="/record" onClick={close} aria-current={recording ? "page" : undefined} className={`${row(recording)} !bg-brand !text-white`}>{PLUS} Record</Link>
+          <div className="my-1.5 border-t border-line" />
+          {SECTIONS.map((s) => (
+            <Link key={s.id} href={s.href} onClick={close} aria-current={section === s.id ? "page" : undefined} className={row(section === s.id)}>
+              <SectionIcon id={s.id} /> {s.label}
+            </Link>
+          ))}
+          <Link href="/settings" onClick={close} aria-current={onSettings ? "page" : undefined} className={row(onSettings)}>
+            <SectionIcon id="settings" /> Settings
+          </Link>
+        </nav>
       )}
-      <button type="button" aria-label="Journal" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
-        className={`grid size-11 place-items-center rounded-full shadow-lg ring-2 ring-ground active:scale-95 ${active || open ? "bg-brand text-white" : "bg-surface text-ink-2"}`}>
-        <SectionIcon id="journal" />
+      <button type="button" aria-label={open ? "Close the menu" : "Open the menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+        className="grid size-14 place-items-center rounded-full bg-brand text-white shadow-lg ring-4 ring-ground active:scale-95">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+          {open ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+        </svg>
       </button>
     </div>
-  );
-}
-
-function BarLink({ href, label, active, icon }: { href: string; label: string; active: boolean; icon: ReactNode }) {
-  return (
-    <Link href={href} aria-current={active ? "page" : undefined}
-      className={`flex flex-col items-center gap-0.5 py-1 text-[11px] font-semibold ${active ? "text-brand" : "text-ink-3"}`}>
-      {icon}
-      {label}
-    </Link>
   );
 }

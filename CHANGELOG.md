@@ -7,7 +7,7 @@ in `package.json` to match.
 ## [1.2.0] - 2026-11-11
 
 ### Journal
-- A new **Journal** tab, next to Future (on a phone, a small round button at the bottom right opens its menu): write down how a period of life feels, in Markdown with a preview, with a date,
+- A new **Journal** tab, next to Future (on a phone, a round button at the bottom right replaces the bottom bar and opens a menu of everything): write down how a period of life feels, in Markdown with a preview, with a date,
   a title and an optional mood. Each entry shows what everything you had was worth on its date, so you can look back
   and remember both.
 
