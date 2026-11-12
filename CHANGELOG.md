@@ -7,6 +7,10 @@ in `package.json` to match.
 ## [1.4.0] - 2026-11-12
 
 ### Spending
+- A **Today** button beside the month on Everyday spending, and beside the year on Hobbies, jumps back to the
+  current one.
+- Hover (or touch) a bar in the Month by month and Year by year charts to read its total and what each category,
+  hobby or tier came to.
 - Each category has a small remark box on the month's form, for what's worth remembering (e.g. "trip to Chiang
   Mai"). The remark shows under the category in "Where it went".
 - Mark each everyday category as a **Must**, a **Need** or a **Want** (under Categories). The starter set comes

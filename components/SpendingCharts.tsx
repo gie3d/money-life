@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { compactMoney, money, pct } from "@/lib/format";
+import StackedBar from "./StackedBar";
+import { money, pct } from "@/lib/format";
 
 /** Spending less is the good direction, so a rise reads in the "miss" colour and a fall in the "go" one. */
 const spendTone = (c: number | null) => (c === null || Math.abs(c) < 0.0005 ? "text-ink-3" : c > 0 ? "text-miss-text" : "text-go-text");
@@ -55,27 +56,9 @@ export function PeriodBars({ title, hint, bars, selected, currency, average, ave
         <p className="py-8 text-center text-sm text-ink-3">Nothing to show yet.</p>
       ) : (
         <ol className="mt-4 flex items-end gap-1 overflow-x-auto pb-1 sm:gap-2">
-          {bars.map((b, i) => {
-            const on = b.key === selected;
-            const total = totals[i];
-            return (
-              <li key={b.key} className="min-w-9 flex-1">
-                <Link href={b.href} aria-current={on ? "page" : undefined} aria-label={`${b.label}: ${money(total, currency)}`}
-                  title={`${b.label}: ${money(total, currency)}`}
-                  className={`group flex flex-col items-center gap-1 rounded-lg px-0.5 pt-1 ${on ? "bg-surface-2" : "hover:bg-surface-2"}`}>
-                  <span className={`num text-[10px] ${on ? "font-bold text-ink" : "text-ink-3"}`}>{total > 0 ? compactMoney(total, currency) : "–"}</span>
-                  <span className="relative flex h-40 w-full max-w-12 flex-col-reverse" aria-hidden>
-                    {b.segments.filter((s) => s.value > 0).map((s, k) => (
-                      <span key={s.label} style={{ height: `${(s.value / max) * 100}%`, background: s.color }}
-                        className={`block w-full shrink-0 ${k === 0 ? "rounded-b-md" : ""} ${on ? "" : "opacity-40 group-hover:opacity-70"}`} />
-                    ))}
-                    {avg !== null && <span className="absolute inset-x-0 border-t border-dashed border-ink-3" style={{ bottom: `${avg * 100}%` }} />}
-                  </span>
-                  <span className={`whitespace-nowrap pb-1 text-[11px] ${on ? "font-bold text-ink" : "text-ink-3"}`}>{b.label}</span>
-                </Link>
-              </li>
-            );
-          })}
+          {bars.map((b, i) => (
+            <StackedBar key={b.key} label={b.label} href={b.href} segments={b.segments} total={totals[i]} max={max} avg={avg} on={b.key === selected} currency={currency} />
+          ))}
         </ol>
       )}
     </section>
@@ -163,13 +146,20 @@ export function ShareBar({ title, rows, currency, against }: { title: string; ro
 }
 
 /** ‹ Nov 2026 › with links to the period before and after. */
-export function PeriodSwitcher({ label, prevHref, nextHref, prevLabel, nextLabel }: { label: string; prevHref: string; nextHref: string | null; prevLabel: string; nextLabel: string }) {
+export function PeriodSwitcher({ label, prevHref, nextHref, prevLabel, nextLabel, todayHref, onToday }: {
+  label: string; prevHref: string; nextHref: string | null; prevLabel: string; nextLabel: string;
+  /** Where "Today" goes, and whether the page already shows it (then the button is dimmed). */
+  todayHref?: string; onToday?: boolean;
+}) {
   const arrow = "grid size-9 place-items-center rounded-full bg-surface text-lg text-ink-2 hover:bg-surface-2";
   return (
     <div className="flex items-center gap-2">
       <Link href={prevHref} aria-label={prevLabel} className={arrow}>‹</Link>
       <p className="num min-w-28 text-center text-lg font-bold" aria-live="polite">{label}</p>
       {nextHref ? <Link href={nextHref} aria-label={nextLabel} className={arrow}>›</Link> : <span className={`${arrow} opacity-30`} aria-hidden>›</span>}
+      {todayHref && (onToday
+        ? <span aria-disabled className="rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-ink-3 opacity-50">Today</span>
+        : <Link href={todayHref} className="rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-brand hover:bg-surface-2">Today</Link>)}
     </div>
   );
 }

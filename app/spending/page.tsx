@@ -110,6 +110,7 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
           label={monthLabel(month)}
           prevHref={href(cmp.prev)} prevLabel={`Show ${against}`}
           nextHref={month < thisMonth ? href(shiftMonth(month, 1)) : null} nextLabel={`Show ${monthLabel(shiftMonth(month, 1))}`}
+          todayHref={href(thisMonth)} onToday={month === thisMonth}
         />
       </div>
 

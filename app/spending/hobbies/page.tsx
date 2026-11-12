@@ -74,6 +74,7 @@ export default async function HobbySpendingPage({ searchParams }: PageProps<"/sp
           label={year}
           prevHref={yearHref(cmp.prev, thisYear)} prevLabel={`Show ${cmp.prev}`}
           nextHref={year < thisYear ? yearHref(String(+year + 1), thisYear) : null} nextLabel={`Show ${+year + 1}`}
+          todayHref={yearHref(thisYear, thisYear)} onToday={year === thisYear}
         />
       </div>
 
