@@ -5,7 +5,7 @@ import Info from "@/components/Info";
 import StaleNotice from "@/components/StaleNotice";
 import { listAccounts, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { goalAssets } from "@/lib/goal-data";
-import { monthsBetween, path, standing, targetValue, valueOn, valuesOn } from "@/lib/goals";
+import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoins } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
@@ -72,9 +72,10 @@ export default async function Home() {
   // Goals, three years out: where each plan should be by then (or at its own date, if sooner), where carrying on
   // from today leads by then, and how each stands against its plan today.
   const goalCards = goals.flatMap((g) => {
-    const plan = goalVersions.filter((v) => v.goalId === g.id).at(-1);
-    if (!plan) return [];
+    const latest = goalVersions.filter((v) => v.goalId === g.id).at(-1);
+    if (!latest) return [];
     const glists = goalLists(g.accountIds);
+    const plan = withJoins(latest, glists);
     const s = standing(plan, glists, today);
     const nowBy = plan.assets.length > 0 ? valuesOn(glists, today) : s.actual;
     const n = monthsBetween(plan.startDate, plan.targetDate);

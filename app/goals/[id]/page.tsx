@@ -10,9 +10,9 @@ import { deleteGoal, deleteGoalVersion, updateGoalNotes } from "@/app/actions/go
 import { listGoals, listGoalVersions } from "@/lib/data";
 import { day, money, signedMoney, tone } from "@/lib/format";
 import { goalAssets } from "@/lib/goal-data";
-import { monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, valueOn, valuesOn, yearly } from "@/lib/goals";
+import PlanGroup from "@/components/PlanGroup";
 import { groupBy } from "@/lib/group";
-import { accountPerformance } from "@/lib/performance";
+import { monthsBetween, path, reachDate, requiredMonthly, standing, targetValue, valueOn, valuesOn, withJoins, yearly, type PlanAsset } from "@/lib/goals";
 import { monthsText } from "@/lib/plan";
 import { requireUser } from "@/lib/session";
 
@@ -36,11 +36,13 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
   const current = versions.at(-1);
   if (!current) notFound();
   // Compare against the current plan, or an earlier version picked below.
-  const plan = versions.find((v) => String(v.id) === sp.v) ?? current;
-  const isCurrent = plan.id === current.id;
+  const chosen = versions.find((v) => String(v.id) === sp.v) ?? current;
+  const isCurrent = chosen.id === current.id;
 
   const today = new Date().toISOString().slice(0, 10);
   const lists = listsOf(goal.accountIds);
+  // Assets the plan gave nothing join it at their first record, so the plan and the table add up to the same.
+  const plan = withJoins(chosen, lists);
   const target = targetValue(plan);
   const s = standing(plan, lists, today);
   const n = monthsBetween(plan.startDate, plan.targetDate);
@@ -69,9 +71,11 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
     const from = `${y - 1}-12-31` > plan.startDate ? `${y - 1}-12-31` : plan.startDate;
     yearCols.push({ year: y, from, to, toDate: to === today });
   }
+  const yearAgo = `${+today.slice(0, 4) - 1}${today.slice(4)}`;
   const listOf = (id: number) => lists.find((l) => l[0]?.accountId === id) ?? [];
   const order = ticks.map((t) => t.id);
-  const planRows = (plan.assets.length > 0 ? plan.assets : goal.accountIds.map((id) => ({ accountId: id, startValue: 0, rate: plan.expectedReturn, monthly: 0 })))
+  const baseAssets: PlanAsset[] = plan.assets.length > 0 ? plan.assets : goal.accountIds.map((id) => ({ accountId: id, startValue: 0, rate: plan.expectedReturn, monthly: 0 }));
+  const planRows = baseAssets
     .map((pa) => {
       const t = ticks.find((x) => x.id === pa.accountId);
       const alone = { ...plan, assets: [pa] };
@@ -79,20 +83,14 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
       return {
         id: pa.accountId, name: t?.name ?? "A removed asset", categoryId: t?.categoryId ?? 0, category: t?.category ?? "Other",
         color: t?.color ?? "var(--ink-3)", rate: pa.rate, monthly: pa.monthly,
-        years: yearCols.map((y) => {
-          const kFrom = monthsBetween(plan.startDate, y.from);
-          const kTo = monthsBetween(plan.startDate, y.to);
-          const planFrom = path(alone, 0, undefined, kFrom).at(-1)!.value;
-          const planTo = path(alone, 0, undefined, kTo).at(-1)!.value;
-          const months = kTo - kFrom;
-          return {
-            plan: planTo,
-            planStart: planFrom,
-            actual: valueOn([list], y.to),
-            planGrowth: months > 0 ? Math.pow(1 + pa.rate, months / 12) - 1 : null,
-            actualReturn: list.length > 0 ? (accountPerformance(list, y.from, y.to)?.returnPct ?? null) : null,
-          };
-        }),
+        // Money actually put in over the last 12 months, net of what was taken out (transfers between assets count).
+        putIn: list.filter((e) => e.date > yearAgo && e.date <= today).reduce((t, e) => t + e.contribution, 0),
+        joined: pa.join?.date ?? null,
+        years: yearCols.map((y) => ({
+          // Before it joins the plan has nothing to expect of it.
+          plan: pa.join && pa.join.date > y.to ? null : path(alone, 0, undefined, monthsBetween(plan.startDate, y.to)).at(-1)!.value,
+          actual: valueOn([list], y.to),
+        })),
       };
     })
     .sort((x, y) => order.indexOf(x.id) - order.indexOf(y.id));
@@ -113,11 +111,10 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
     const qs = q.toString();
     return `/goals/${id}${qs ? `?${qs}` : ""}`;
   };
+  // A group's (or the whole table's) year: every row added up, so the total is the plan the chart draws and the value held.
   const sumYear = (rows: typeof planRows, i: number) => ({
-    plan: rows.reduce((t, r) => t + r.years[i].plan, 0),
+    plan: rows.every((r) => r.years[i].plan === null) ? null : rows.reduce((t, r) => t + (r.years[i].plan ?? 0), 0),
     actual: rows.reduce((t, r) => t + r.years[i].actual, 0),
-    planGrowth: null,
-    actualReturn: null,
   });
   const ahead = s.gap >= 0;
 
@@ -261,9 +258,6 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
               {plan.targetMode === "spending" && ` · inflation ${pct(plan.inflation)}`}
             </p>
           </div>
-          <p className="px-4 pb-2 text-xs text-ink-3 sm:px-6">
-            In each year, top to bottom: <span className="text-ink-2">plan</span> · <span className="font-semibold text-ink">actual</span> · <span className="font-semibold text-go-text">difference</span>.
-          </p>
           {yearCols.length > WINDOW && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-3 text-xs sm:px-6">
               <span className="num text-ink-3">{showAll ? `All ${yearCols.length} years` : `${shown[0].year}–${shown.at(-1)!.year} of ${yearCols[0].year}–${yearCols[lastIdx].year}`}</span>
@@ -277,56 +271,58 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: `${36 + shown.length * 10}rem` }}>
+            <table className="w-full text-sm" style={{ minWidth: `${44 + shown.length * 12}rem` }}>
               <thead>
                 <tr className="eyebrow text-left">
                   <th className={`${stick} bg-surface py-2 pl-4 sm:pl-6`}>Asset</th>
-                  <th className="py-2 text-right">Growth a year</th>
-                  <th className="py-2 text-right">Put in a month</th>
-                  <th className="py-2 text-right">Put in a year</th>
+                  <th className="py-2 pl-3 text-right">Growth a year</th>
+                  <th className="py-2 pl-3 text-right">Put in a month</th>
+                  <th className="py-2 pl-3 text-right">Put in a year<span className="block font-normal normal-case">expected</span></th>
+                  <th className="py-2 pl-3 text-right">Put in a year<span className="block font-normal normal-case">actual, last 12 months</span></th>
                   {shown.map((y) => (
                     <th key={y.year} className="py-2 pl-3 text-right">{y.year}{y.toDate && <span className="ml-1 font-normal normal-case">to {day(y.to, false)}</span>}</th>
                   ))}
                 </tr>
               </thead>
               {groupBy(planRows, (r) => r.categoryId).map(({ key, items }) => (
-                <tbody key={key}>
-                  <tr className="bg-surface-2 font-bold">
-                    <td className={`${stick} bg-surface-2 py-2.5 pl-4 sm:pl-6`}>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="size-2.5 rounded-full" style={{ background: items[0].color }} />
-                        {items[0].category}
-                      </span>
-                    </td>
+                <PlanGroup key={key} count={items.length}
+                  label={<span className="inline-flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ background: items[0].color }} />{items[0].category}</span>}
+                  cells={<>
                     <td />
-                    <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0), cur)}</td>
-                    <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0) * 12, cur)}</td>
-                    {shown.map((y) => yearCell(`${key}-${y.year}`, sumYear(items, y.i), cur, false))}
-                  </tr>
+                    <td className="num py-2.5 pl-3 text-right">{money(items.reduce((t, r) => t + r.monthly, 0), cur)}</td>
+                    <td className="num py-2.5 pl-3 text-right">{money(items.reduce((t, r) => t + r.monthly, 0) * 12, cur)}</td>
+                    <td className="num py-2.5 pl-3 text-right">{money(items.reduce((t, r) => t + r.putIn, 0), cur)}</td>
+                    {shown.map((y) => yearCell(`${key}-${y.year}`, sumYear(items, y.i), cur))}
+                  </>}>
                   {items.map((r) => (
                     <tr key={r.id}>
-                      <td className={`${stick} bg-surface py-2.5 pl-8 font-semibold sm:pl-10`}><Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link></td>
-                      <td className="num py-2.5 text-right">{pct(r.rate)}</td>
-                      <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly, cur) : "—"}</td>
-                      <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly * 12, cur) : "—"}</td>
-                      {shown.map((y) => yearCell(`${r.id}-${y.year}`, r.years[y.i], cur, true))}
+                      <td className={`${stick} bg-surface py-2.5 pl-8 font-semibold sm:pl-10`}>
+                        <Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link>
+                        {r.joined && <span className="block text-xs font-normal text-ink-3">expected from {day(r.joined)}</span>}
+                      </td>
+                      <td className="num py-2.5 pl-3 text-right">{pct(r.rate)}</td>
+                      <td className="num py-2.5 pl-3 text-right">{r.monthly > 0 ? money(r.monthly, cur) : "—"}</td>
+                      <td className="num py-2.5 pl-3 text-right">{r.monthly > 0 ? money(r.monthly * 12, cur) : "—"}</td>
+                      <td className={`num py-2.5 pl-3 text-right ${Math.abs(r.putIn) < 0.005 ? "text-ink-3" : ""}`}>{Math.abs(r.putIn) < 0.005 ? "—" : money(r.putIn, cur)}</td>
+                      {shown.map((y) => yearCell(`${r.id}-${y.year}`, r.years[y.i], cur))}
                     </tr>
                   ))}
-                </tbody>
+                </PlanGroup>
               ))}
               <tfoot>
-                <tr className="font-bold">
+                <tr className="border-t border-line font-bold">
                   <td className={`${stick} bg-surface py-3 pl-4 sm:pl-6`}>Total</td>
                   <td />
-                  <td className="num py-3 text-right">{money(plan.monthlyContribution, cur)}</td>
-                  <td className="num py-3 text-right">{money(plan.monthlyContribution * 12, cur)}</td>
-                  {shown.map((y) => yearCell(`total-${y.year}`, sumYear(planRows, y.i), cur, false))}
+                  <td className="num py-3 pl-3 text-right">{money(plan.monthlyContribution, cur)}</td>
+                  <td className="num py-3 pl-3 text-right">{money(plan.monthlyContribution * 12, cur)}</td>
+                  <td className="num py-3 pl-3 text-right">{money(planRows.reduce((t, r) => t + r.putIn, 0), cur)}</td>
+                  {shown.map((y) => yearCell(`total-${y.year}`, sumYear(planRows, y.i), cur))}
                 </tr>
               </tfoot>
             </table>
           </div>
           <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
-            Each year shows three lines: the plan&apos;s value at its end (today, for this year), the actual value, and the difference. Under the first two: the growth the plan expected over that stretch, and the return the asset actually made, with money put in or taken out set aside.
+            Each year shows the value the plan expected at its end (today, for this year), the actual value, and how far off it is. Put in a year, actual, is what went in over the last 12 months, less what came out (moving an asset to another counts as out of one and into the other). An asset the plan gave no start value or monthly amount is expected from its first record on, at its own growth rate with nothing put in, and has no expected value before that. The total adds every row, so it matches the plan on the chart.
           </p>
         </section>
 
@@ -377,20 +373,32 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
   );
 }
 
-type YearCell = { plan: number; actual: number; planGrowth: number | null; actualReturn: number | null };
-
 /** The first column of the plan table stays put while the years scroll. */
 const stick = "sticky left-0 z-10 border-r border-line";
 
-/** One year in one cell: the plan, the actual and the difference, with the growth under each value where it applies. */
-function yearCell(key: string, c: YearCell, cur: string, strong: boolean) {
-  const diff = c.actual - c.plan;
-  const sub = (f: number | null) => (f === null ? null : <span className="block text-xs font-normal text-ink-3">{f >= 0 ? "+" : "−"}{Math.abs(f * 100).toFixed(1)}%</span>);
+/** One line of a year cell: what it is on the left, the figure on the right. */
+function Line({ label, children, cls = "" }: { label: string; children: React.ReactNode; cls?: string }) {
   return (
-    <td key={key} className="num py-2.5 pl-3 text-right align-top">
-      <span className="block text-ink-2" title="Plan">{money(c.plan, cur)}</span>{sub(c.planGrowth)}
-      <span className={`mt-1 block ${strong ? "font-semibold" : ""}`} title="Actual">{money(c.actual, cur)}</span>{sub(c.actualReturn)}
-      <span className={`mt-1 block text-xs font-semibold ${tone(diff)}`} title="Difference">{signedMoney(diff, cur)}</span>
+    <span className={`flex items-baseline justify-between gap-3 ${cls}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-3">{label}</span>
+      <span>{children}</span>
+    </span>
+  );
+}
+
+type YearCell = { plan: number | null; actual: number };
+
+/** One year of one row: the value the plan expected at its end, the actual, and the difference as a share of the expected. */
+function yearCell(key: string, c: YearCell, cur: string) {
+  const diff = c.actual - (c.plan ?? 0);
+  const show = c.plan !== null && c.plan > 0;
+  return (
+    <td key={key} className="num min-w-44 py-2.5 pl-3 align-top">
+      <Line label="Expected" cls="text-ink-2">{c.plan === null ? "—" : money(c.plan, cur)}</Line>
+      <Line label="Actual" cls="font-semibold">{money(c.actual, cur)}</Line>
+      <Line label="Diff %" cls={`text-xs font-semibold ${show ? tone(diff) : "text-ink-3"}`}>
+        {show ? `${diff >= 0 ? "+" : "−"}${Math.abs((diff / c.plan!) * 100).toFixed(1)}%` : "—"}
+      </Line>
     </td>
   );
 }

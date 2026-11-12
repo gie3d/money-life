@@ -1,5 +1,6 @@
 // node --experimental-strip-types scripts/test-performance.mjs
 import assert from "node:assert/strict";
+import { balanceTrend } from "../lib/trend.ts";
 import { accountPerformance, netWorthSeries, periodStart, resample } from "../lib/performance.ts";
 
 const e = (date, value, contribution = 0) => ({ id: 0, accountId: 1, date, value, contribution, note: null });
@@ -52,4 +53,10 @@ assert.equal(periodStart("ALL", "2026-10-26"), null);
 // at 44,832, it is -2%, not -100% from a tiny day-weighted base.
 p = accountPerformance([e("2026-10-24", 0), e("2026-11-08", 45743, 45743), e("2026-11-12", 44832)], "2026-05-12", "2026-11-12");
 near(p.start, 45743); near(p.gain, -911); near(p.returnPct, -911 / 45743);
+// Cash: a group starts when every account has a record, and shows the balance change, not a return.
+const cash = (id, ...r) => r.map(([date, value]) => ({ ...e(date, value), accountId: id, cost: value }));
+let bt = balanceTrend([cash(1, ["2026-10-24", 1500], ["2026-11-08", 1800]), cash(2, ["2026-11-08", 280000])], "2026-11-12");
+assert.equal(bt.since, "2026-11-08"); near(bt.gain, 0); assert.equal(bt.returnPct, null);
+bt = balanceTrend([cash(1, ["2026-10-31", 5000], ["2026-11-08", 300])], "2026-11-12");
+near(bt.gain, -4700); assert.equal(bt.tone, "down");
 console.log("ok");

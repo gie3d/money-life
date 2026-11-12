@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import MonthSpendingForm from "@/components/MonthSpendingForm";
 import SectionTabs from "@/components/SectionTabs";
 import SpendingCategories from "@/components/SpendingCategories";
-import BarsSwitch from "@/components/BarsSwitch";
-import { CategoryBars, Change, MiniBars, PeriodSwitcher, Tile } from "@/components/SpendingCharts";
+import type { TableRow } from "@/components/MonthTable";
+import SpendingBreakdown from "@/components/SpendingBreakdown";
+import { CategoryBars, Change, PeriodSwitcher, ShareBar, Tile } from "@/components/SpendingCharts";
 import { startSpendingCategories } from "@/app/actions/spending";
-import { listMonthlySpending, listSpendingCategories } from "@/lib/data";
+import { listMonthlyNotes, listMonthlySpending, listSpendingCategories } from "@/lib/data";
 import { money, monthLabel } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 import { amountOf, change, compareMonth, isMonth, monthsBetween, shiftMonth, STARTER_CATEGORIES, tierTotals, TIERS, UNSORTED } from "@/lib/spending";
@@ -27,7 +28,8 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
   const month = isMonth(sp.month) && sp.month <= thisMonth ? sp.month : thisMonth;
   const href = (m: string) => (m === thisMonth ? "/spending" : `/spending?month=${m}`);
 
-  const [categories, amounts] = await Promise.all([listSpendingCategories(user.id), listMonthlySpending(user.id)]);
+  const [categories, amounts, notes] = await Promise.all([listSpendingCategories(user.id), listMonthlySpending(user.id), listMonthlyNotes(user.id)]);
+  const noteOf = (id: number) => notes.find((n) => n.categoryId === id && n.month === month)?.note ?? "";
   // A category's colour follows its place among all of them, so it stays the same on every chart and month.
   const colorOf = new Map(categories.map((c, i) => [c.id, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]));
   const has = (id: number, m: string) => amounts.some((a) => a.categoryId === id && a.month === m);
@@ -42,10 +44,11 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
     id: c.id, name: c.name, color: colorOf.get(c.id)!, archived: c.archived,
     amount: has(c.id, month) ? amountOf(amounts, c.id, month) : null,
     last: has(c.id, cmp.prev) ? amountOf(amounts, c.id, cmp.prev) : null,
+    note: noteOf(c.id),
   }));
   const anyPrev = cmp.prevTotal !== null;
   const rows = categories
-    .map((c) => ({ category: c.name, color: colorOf.get(c.id)!, total: amountOf(amounts, c.id, month), before: anyPrev ? amountOf(amounts, c.id, cmp.prev) : null }))
+    .map((c) => ({ category: c.name, color: colorOf.get(c.id)!, total: amountOf(amounts, c.id, month), before: anyPrev ? amountOf(amounts, c.id, cmp.prev) : null, note: noteOf(c.id) || undefined }))
     .filter((r) => r.total > 0)
     .sort((a, b) => b.total - a.total);
   const top = rows[0];
@@ -80,6 +83,20 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
     })),
   }));
   const tierName = (t: Tier | null) => TIERS.find((x) => x.id === t)?.label;
+
+  // One row of the table for a set of categories: a month counts as recorded when any of them has an amount in it.
+  const sumOf = (ids: number[], m: string) => ids.reduce((t, id) => t + amountOf(amounts, id, m), 0);
+  const recordedIn = (ids: number[], m: string) => ids.some((id) => has(id, m));
+  const tableRow = (key: string, name: string, color: string, ids: number[], muted?: boolean, badge?: string): TableRow => {
+    const trend = trendMonths.map((m) => ({ key: m, value: recordedIn(ids, m) ? sumOf(ids, m) : null }));
+    const cells = tableMonths.map((m) => (recordedIn(ids, m) ? sumOf(ids, m) : null));
+    const got = cells.filter((v): v is number => v !== null);
+    const v = trend.filter((x) => x.value !== null);
+    return {
+      key, name, color, badge, muted, trend, cells, average: got.length > 0 ? got.reduce((a, b) => a + b, 0) / got.length : null,
+      trendLabel: v.length === 0 ? `${name}: nothing in the last 12 months` : `${name}, last 12 months: from ${money(v[0].value!, cur)} in ${monthLabel(v[0].key)} to ${money(v.at(-1)!.value!, cur)} in ${monthLabel(v.at(-1)!.key)}`,
+    };
+  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -124,59 +141,30 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
 
           <div className="grid items-start gap-5 lg:grid-cols-2">
             <MonthSpendingForm key={month} month={month} label={monthLabel(month)} prevLabel={against} rows={formRows} currency={cur} />
-            <CategoryBars title={`Where it went in ${monthLabel(month)}`} rows={rows} currency={cur} against={`vs ${against}`} />
+            <CategoryBars title={`Where it went in ${monthLabel(month)}`} rows={rows} currency={cur} against={`vs ${against}`}
+              footer={<ShareBar title="Must, need, want" rows={tierRows.filter((t) => t.total > 0 || t.id !== "none").map((t) => ({ category: t.label, color: t.color, total: t.total, before: t.before }))} currency={cur} against={`vs ${against}`} />} />
           </div>
 
-          <CategoryBars title={`Must, need, want in ${monthLabel(month)}`} rows={tierRows.filter((t) => t.total > 0 || t.id !== "none").map((t) => ({ category: t.label, color: t.color, total: t.total, before: t.before }))} currency={cur} against={`vs ${against}`} />
-
-          <BarsSwitch title="Month by month" selected={month} currency={cur} average={cmp.average} averageLabel="6-month average"
-            views={[
+          <SpendingBreakdown
+            options={[{ id: "category", label: "Category" }, { id: "tier", label: "Must, need, want" }]}
+            selected={month} currency={cur} average={cmp.average} averageLabel="6-month average"
+            charts={[
               { id: "category", label: "By category", hint: "The 12 months up to the one shown, by category. Tap a month to open it.", bars },
               { id: "tier", label: "Must, need, want", bars: tierBars,
                 hint: tierRows.find((t) => t.id === "none")!.total > 0 ? "Categories not sorted yet show in grey; sort them under Categories below." : "The 12 months up to the one shown, by tier. Tap a month to open it.",
                 legend: [...TIERS, UNSORTED].map((t) => ({ label: t.label, color: t.color })) },
-            ]} />
-
-          <section className="card p-5 sm:p-6">
-            <h2 className="text-lg">Each category, month by month</h2>
-            <p className="text-xs text-ink-3">The 6 months up to {monthLabel(month)}, each category&apos;s trend over the last 12, and its average over the months it has.</p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="num w-full min-w-[42rem] text-sm">
-                <thead>
-                  <tr className="text-right text-xs text-ink-3">
-                    <th className="py-2 text-left font-semibold">Category</th>
-                    <th className="py-2 pl-3 text-left font-semibold">12 months</th>
-                    {tableMonths.map((m) => <th key={m} className={`py-2 pl-3 font-semibold ${m === month ? "text-ink" : ""}`}>{shortMonth(m, false)}</th>)}
-                    <th className="py-2 pl-3 font-semibold">Average</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {tableCats.map((c) => {
-                    const recorded = tableMonths.filter((m) => has(c.id, m));
-                    const avg = recorded.length > 0 ? recorded.reduce((s, m) => s + amountOf(amounts, c.id, m), 0) / recorded.length : null;
-                    return (
-                      <tr key={c.id}>
-                        <td className="py-2 pr-3 text-left">
-                          <span className={`flex items-center gap-2 font-semibold ${c.archived ? "text-ink-3" : ""}`}><span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf.get(c.id) }} />{c.name}{c.tier && <span className="rounded-full bg-surface-2 px-2 text-[10px] font-semibold text-ink-3">{tierName(c.tier)}</span>}</span>
-                        </td>
-                        <td className="py-2 pl-3"><MiniBars values={trendOf(c.id)} selected={month} color={colorOf.get(c.id)!} label={trendLabel(c.name, c.id)} /></td>
-                        {tableMonths.map((m) => (
-                          <td key={m} className={`py-2 pl-3 text-right ${m === month ? "font-bold" : ""} ${has(c.id, m) ? "" : "text-ink-3"}`}>{has(c.id, m) ? money(amountOf(amounts, c.id, m), cur) : "–"}</td>
-                        ))}
-                        <td className="py-2 pl-3 text-right text-ink-3">{avg === null ? "–" : money(avg, cur)}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="font-bold">
-                    <td className="py-2 pr-3 text-left">Total</td>
-                    <td className="py-2 pl-3"><MiniBars values={trendOf(null)} selected={month} color="var(--ink-2)" label={trendLabel("Total", null)} /></td>
-                    {tableMonths.map((m) => <td key={m} className={`py-2 pl-3 text-right ${monthTotal(m) > 0 ? "" : "text-ink-3"}`}>{monthTotal(m) > 0 ? money(monthTotal(m), cur) : "–"}</td>)}
-                    <td />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+            ]}
+            tableHint={`The 6 months up to ${monthLabel(month)}, each row's trend over the last 12, and its average over the months it has.`}
+            months={tableMonths.map((m) => ({ key: m, label: shortMonth(m, false) }))}
+            tables={[
+              { id: "category", label: "By category", heading: "Category", rows: tableCats.map((c) => tableRow(c.id.toString(), c.name, colorOf.get(c.id)!, [c.id], c.archived, c.tier ? tierName(c.tier) : undefined)) },
+              { id: "tier", label: "Must, need, want", heading: "Tier",
+                rows: [...TIERS, UNSORTED]
+                  .map((t) => ({ t, ids: categories.filter((c) => (c.tier ?? "none") === t.id).map((c) => c.id) }))
+                  .filter(({ t, ids }) => t.id !== "none" || ids.some((id) => trendMonths.some((m) => has(id, m))))
+                  .map(({ t, ids }) => tableRow(t.id, t.label, t.color, ids, false)) },
+            ]}
+            total={{ trend: trendOf(null), trendLabel: trendLabel("Total", null), cells: tableMonths.map((m) => (amounts.some((a) => a.month === m) ? monthTotal(m) : null)) }} />
 
           <SpendingCategories active={active.map(item)} archived={archived.map(item)} />
         </>

@@ -206,7 +206,7 @@ export type GoalVersion = {
   note: string | null;
   createdAt: string;
   /** Each asset's own start value, expected yearly rate and monthly amount; empty for a plan made as one pot. */
-  assets: { accountId: number; startValue: number; rate: number; monthly: number }[];
+  assets: { accountId: number; startValue: number; rate: number; monthly: number; join?: { k: number; value: number; date: string } }[];
 };
 
 /** The moods an entry can be marked with, from good to hard. */
@@ -237,6 +237,9 @@ export type SpendingCategory = { id: number; name: string; position: number; arc
 
 /** What one everyday category came to in one month ("2026-11"). */
 export type MonthlySpending = { categoryId: number; month: string; amount: number };
+
+/** A remark on one everyday category in one month ("2026-11"). */
+export type MonthlyNote = { categoryId: number; month: string; note: string };
 
 /** Something spent on a hobby: a trip, a gadget, gear. */
 export type Spending = {

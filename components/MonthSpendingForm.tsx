@@ -6,7 +6,7 @@ import NumberInput from "./NumberInput";
 import type { FormState } from "@/app/actions/auth";
 import { money, plainNumber } from "@/lib/format";
 
-export type MonthRow = { id: number; name: string; color: string; amount: number | null; last: number | null; archived: boolean };
+export type MonthRow = { id: number; name: string; color: string; amount: number | null; last: number | null; archived: boolean; note: string };
 
 const parse = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(/,/g, "")) || 0);
 
@@ -34,7 +34,7 @@ export default function MonthSpendingForm({ month, label, prevLabel, rows, curre
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-lg">Spending in {label}</h2>
-          <p className="text-xs text-ink-3">The total of each category for the month. Leave a box empty if there was none.</p>
+          <p className="text-xs text-ink-3">The total of each category for the month, and a remark if something is worth remembering. Leave a box empty if there was none.</p>
         </div>
         {canCopy && (
           <button type="button" className="btn btn-quiet !px-3 !py-1.5 text-xs"
@@ -46,7 +46,7 @@ export default function MonthSpendingForm({ month, label, prevLabel, rows, curre
 
       <ul className="divide-y divide-line">
         {rows.map((r) => (
-          <li key={r.id} className="grid grid-cols-[1fr_minmax(7rem,10rem)] items-center gap-x-3 py-2">
+          <li key={r.id} className="grid grid-cols-[1fr_minmax(7rem,10rem)] items-center gap-x-3 gap-y-1.5 py-2">
             <label htmlFor={`a-${r.id}`} className="min-w-0">
               <span className="flex items-center gap-2 text-sm font-semibold">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ background: r.color }} aria-hidden />
@@ -56,6 +56,8 @@ export default function MonthSpendingForm({ month, label, prevLabel, rows, curre
               <span className="num block pl-[1.125rem] text-xs text-ink-3">{r.last === null ? `Nothing in ${prevLabel}` : `${prevLabel}: ${money(r.last, currency)}`}</span>
             </label>
             <NumberInput id={`a-${r.id}`} name={`a-${r.id}`} value={values[r.id] ?? ""} onValueChange={(v) => set(r.id, v)} placeholder="0" className="field num text-right" />
+            <input name={`n-${r.id}`} defaultValue={r.note} maxLength={300} onChange={() => setSaved(false)} placeholder="Remark, e.g. trip to Chiang Mai"
+              aria-label={`Remark for ${r.name}`} className="field col-span-2 !py-1.5 text-xs" />
           </li>
         ))}
         <li className="grid grid-cols-[1fr_minmax(7rem,10rem)] items-center gap-x-3 pt-3 text-sm font-bold">

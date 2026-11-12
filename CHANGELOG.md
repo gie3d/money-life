@@ -7,21 +7,34 @@ in `package.json` to match.
 ## [1.4.0] - 2026-11-12
 
 ### Spending
+- Each category has a small remark box on the month's form, for what's worth remembering (e.g. "trip to Chiang
+  Mai"). The remark shows under the category in "Where it went".
 - Mark each everyday category as a **Must**, a **Need** or a **Want** (under Categories). The starter set comes
   sorted; your existing categories start as "Not sorted" until you choose.
-- The Everyday page now shows the month split into Must, Need and Want against last month, and a switch on the
-  Month by month chart stacks the last 12 months by category or by tier. Each category in the table carries its tier.
+- The Everyday page now shows the month split into Must, Need and Want, as one bar of 100% under "Where it went"
+  with each share's change against last month. One "Group by" switch above the Month by month chart sets both the chart and the
+  month-by-month table to categories or Must, Need, Want. Each category in the table carries its tier. Hover (or touch) a small trend chart in the table to read the month and
+  amount under it.
 
 ### Goals
-- The plan table on a goal is much narrower: each year is one column with the plan, the actual and the difference
-  stacked, the asset names stay in view while you scroll, and it shows the latest 3 years, with Earlier / Later
-  to page through the rest or "Show all years".
+- The plan table on a goal is rebuilt with one row per asset, grouped under its category (a row for the category adds its assets up, and a click on it opens or folds its assets, folded to start): its expected growth a year, the amount to put in a
+  month, what that makes in a year (expected) against what actually went in over the last 12 months, and then a column
+  per year with the value the plan expected at its end, the actual value and the difference as a percentage. It
+  shows the latest 3 years, with Earlier / Later to page through the rest or "Show all years", and the asset names
+  stay in view while you scroll. An asset the plan gave no start value or monthly amount is expected from its first
+  record on, at its own growth rate, and the total adds every row. That expectation is part of the plan itself, so the chart, the
+  goal's status on Home and the Goals list count those assets the same way.
 
 ### Assets
+- Hover (or touch) the small chart on an asset or group to read the date and value under the pointer: the balance
+  and its change for cash and savings, the change since the start for investments.
+- Cash and savings no longer show a return percentage: a balance rises and falls with what you spend and deposit,
+  so it reads as an amount only. Their small chart is the balance itself, and a group starts on the first day every
+  account in it has a record, so accounts you added later don't read as the balance jumping from nothing.
 - Fixed an asset's 6-month return reading far too low (e.g. -104%) when it was funded by a transfer or first
   purchase only days ago. Records from before it held anything no longer count as a starting balance of zero.
 - The small chart beside an asset now sets money moved in or out aside, so moving BTC to another wallet no longer
-  looks like a drop. The date it starts from shows at its left, and the percentage and the amount beside it are the
+  looks like a drop. The date it starts from and its value then are written inside it, at its left end, and the percentage and the amount beside it are the
   change since that date (the last 6 months, or the day a newer asset first held anything). That amount replaces the
   value-against-cost one on each row; the investments total still uses cost.
 

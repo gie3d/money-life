@@ -4,7 +4,7 @@ import SectionTabs from "@/components/SectionTabs";
 import { listGoals, listGoalVersions } from "@/lib/data";
 import { day, money, signedMoney } from "@/lib/format";
 import { goalAssets } from "@/lib/goal-data";
-import { monthsBetween, standing, targetValue } from "@/lib/goals";
+import { monthsBetween, standing, targetValue, withJoins } from "@/lib/goals";
 import { monthsText } from "@/lib/plan";
 import { requireUser } from "@/lib/session";
 
@@ -35,8 +35,9 @@ export default async function GoalsPage() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
           {goals.map((g) => {
-            const plan = versions.filter((v) => v.goalId === g.id).at(-1);
-            if (!plan) return null;
+            const latest = versions.filter((v) => v.goalId === g.id).at(-1);
+            if (!latest) return null;
+            const plan = withJoins(latest, listsOf(g.accountIds));
             const target = targetValue(plan);
             const s = standing(plan, listsOf(g.accountIds), today);
             const share = target > 0 ? Math.min(1, s.actual / target) : 0;

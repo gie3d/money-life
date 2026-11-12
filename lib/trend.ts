@@ -1,7 +1,7 @@
 import { extendTo, netWorthSeries, periodStart, totalPerformance, type Point } from "./performance.ts";
 import type { Entry } from "./types.ts";
 
-export type Trend = { points: Point[]; tone: "up" | "down" | "flat"; returnPct: number | null; /** What it gained or lost over the same span, money moved in or out set aside. */ gain: number; /** The date the chart, the percentage and the gain all start from. */ since: string };
+export type Trend = { points: Point[]; tone: "up" | "down" | "flat"; returnPct: number | null; /** A plain balance (cash, savings): the change is shown as an amount only, with no return. */ balance?: boolean; /** What it gained or lost over the same span, money moved in or out set aside. */ gain: number; /** The date the chart, the percentage and the gain all start from. */ since: string };
 
 /**
  * The series with money put in or taken out set aside, so a line moves only with performance: a transfer to another
@@ -19,6 +19,25 @@ function withoutFlows(points: Point[], lists: Entry[][], from: string): Point[] 
     for (const e of live) if (e.date > open.date) flows.push({ date: e.date, amount: e.contribution });
   }
   return points.map((p) => ({ ...p, value: p.value - flows.filter((f) => f.date <= p.date).reduce((s, f) => s + f.amount, 0) }));
+}
+
+/**
+ * The last 6 months of cash or savings, for a small chart: the balance itself, and how much it changed. A balance moves
+ * with spending and deposits, so it has no return to speak of. A group starts on the first day every account in it has
+ * a record, so accounts added to the app later don't read as the balance jumping from nothing.
+ */
+export function balanceTrend(lists: Entry[][], today: string): Trend | null {
+  const kept = lists
+    .map((l) => { const i = l.findIndex((e) => e.value !== 0 || e.contribution !== 0); return i < 0 ? l : l.slice(i); })
+    .filter((l) => l.length > 0);
+  if (kept.length === 0) return null;
+  const from = periodStart("6M", today)!;
+  const latestFirst = kept.map((l) => l[0].date).sort().at(-1)!;
+  const start = latestFirst > from ? latestFirst : from;
+  const points = extendTo(netWorthSeries(kept, start, today), today);
+  if (points.length === 0) return null;
+  const gain = points.at(-1)!.value - points[0].value;
+  return { points, tone: Math.abs(gain) < 0.005 ? "flat" : gain > 0 ? "up" : "down", returnPct: null, balance: true, gain, since: points[0].date };
 }
 
 /**

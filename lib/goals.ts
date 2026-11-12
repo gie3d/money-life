@@ -2,7 +2,11 @@ import { addMonths } from "./plan.ts";
 import type { Entry, GoalVersion } from "./types.ts";
 
 /** One asset in a plan: what it starts with, the yearly rate it is expected to grow at, and what goes in each month. */
-export type PlanAsset = { accountId: number; startValue: number; rate: number; monthly: number };
+export type PlanAsset = {
+  accountId: number; startValue: number; rate: number; monthly: number;
+  /** Set by `withJoins` for an asset the plan gave nothing: it is expected from month `k` (its first record, `date`) at `value`. */
+  join?: { k: number; value: number; date: string };
+};
 
 export type Plan = Pick<GoalVersion, "startDate" | "startValue" | "targetDate" | "targetMode" | "targetAmount" | "monthlySpending"
   | "withdrawalRate" | "expectedReturn" | "inflation" | "monthlyContribution" | "contributionGrowth"> & { assets?: PlanAsset[] };
@@ -47,6 +51,24 @@ const growthAt = (p: Plan, k: number) => Math.pow(1 + p.contributionGrowth, Math
 /** The planned contribution in month k, all assets together. */
 export const contributionAt = (p: Plan, k: number) => buckets(p).reduce((s, b) => s + b.monthly, 0) * growthAt(p, k);
 
+/**
+ * The plan with each asset it gave nothing (no start value, no monthly amount) joining at its first record after the
+ * start: from then on it is expected to be worth that, growing at its own rate. Without this such an asset counts as
+ * 0 in the plan while its real value counts in the actual, and the plan looks far behind. Worked out from the records,
+ * so it is the same wherever the plan is shown.
+ */
+export function withJoins<P extends Plan>(p: P, lists: Entry[][]): P {
+  if (!p.assets || p.assets.length === 0) return p;
+  return {
+    ...p,
+    assets: p.assets.map((a) => {
+      if (a.startValue > 0 || a.monthly > 0) return a;
+      const first = lists.find((l) => l[0]?.accountId === a.accountId)?.find((e) => e.date > p.startDate && e.value > 0);
+      return first ? { ...a, join: { k: Math.max(1, monthsBetween(p.startDate, first.date)), value: first.value, date: first.date } } : a;
+    }),
+  };
+}
+
 export type PathPoint = { k: number; date: string; value: number; contributed: number };
 
 /**
@@ -63,6 +85,9 @@ export function path(p: Plan, fromK = 0, start?: number | Map<number, number>, u
   for (let k = fromK + 1; k <= untilK; k++) {
     const g = growthAt(p, k);
     for (let i = 0; i < bs.length; i++) {
+      const join = bs[i].join;
+      if (join && k < join.k) { v[i] = 0; continue; } // not yet there
+      if (join && k === join.k) { v[i] = join.value; continue; } // arrives with what it was worth
       v[i] = v[i] * (1 + rates[i]) + bs[i].monthly * g;
       paid += bs[i].monthly * g;
     }

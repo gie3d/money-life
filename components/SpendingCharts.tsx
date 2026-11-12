@@ -82,10 +82,10 @@ export function PeriodBars({ title, hint, bars, selected, currency, average, ave
   );
 }
 
-export type CategoryRow = { category: string; color: string; total: number; count?: number; before: number | null };
+export type CategoryRow = { category: string; color: string; total: number; count?: number; before: number | null; /** A remark on it, shown under its line. */ note?: string };
 
 /** Where the money went, largest first, each with its change from the period before. */
-export function CategoryBars({ title, rows, currency, against }: { title: string; rows: CategoryRow[]; currency: string; against: string }) {
+export function CategoryBars({ title, rows, currency, against, footer }: { title: string; rows: CategoryRow[]; currency: string; against: string; footer?: React.ReactNode }) {
   const total = rows.reduce((s, r) => s + r.total, 0);
   const max = Math.max(...rows.map((r) => r.total), 0);
   return (
@@ -115,6 +115,7 @@ export function CategoryBars({ title, rows, currency, against }: { title: string
                     : <> · <span className={spendTone(c)}>{pct(c, 0)}</span> {against}</>}
                 </span>
                 <span />
+                {r.note && <p className="col-span-3 mt-0.5 text-xs italic text-ink-2 [overflow-wrap:anywhere] sm:col-start-2">“{r.note}”</p>}
               </li>
             );
           })}
@@ -125,7 +126,39 @@ export function CategoryBars({ title, rows, currency, against }: { title: string
           </li>
         </ul>
       )}
+      {total > 0 && footer}
     </section>
+  );
+}
+
+/** The month's spending split in two or three parts as one bar of 100%, with each part's share, amount and change. */
+export function ShareBar({ title, rows, currency, against }: { title: string; rows: CategoryRow[]; currency: string; against: string }) {
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  if (total <= 0) return null;
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <h3 className="text-sm font-bold">{title}</h3>
+      <div className="mt-2 flex h-4 overflow-hidden rounded-full bg-surface-2" role="img"
+        aria-label={rows.filter((r) => r.total > 0).map((r) => `${r.category} ${((r.total / total) * 100).toFixed(0)}%`).join(", ")}>
+        {rows.filter((r) => r.total > 0).map((r) => <span key={r.category} style={{ width: `${(r.total / total) * 100}%`, background: r.color }} className="block h-full" />)}
+      </div>
+      <ul className="mt-3 space-y-1.5">
+        {rows.map((r) => {
+          const c = r.before === null || r.before <= 0 ? null : (r.total - r.before) / r.before;
+          return (
+            <li key={r.category} className="flex items-center gap-2 text-sm">
+              <span className="size-2.5 shrink-0 rounded-full" style={{ background: r.color }} />
+              <span className="font-semibold">{r.category}</span>
+              <span className="num font-bold">{((r.total / total) * 100).toFixed(0)}%</span>
+              <span className="num min-w-0 truncate text-xs text-ink-3">
+                {money(r.total, currency)}
+                {r.before === null || r.before <= 0 ? (r.total > 0 && <> · new {against}</>) : <> · <span className={spendTone(c)}>{pct(c, 0)}</span> {against}</>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -138,28 +171,5 @@ export function PeriodSwitcher({ label, prevHref, nextHref, prevLabel, nextLabel
       <p className="num min-w-28 text-center text-lg font-bold" aria-live="polite">{label}</p>
       {nextHref ? <Link href={nextHref} aria-label={nextLabel} className={arrow}>›</Link> : <span className={`${arrow} opacity-30`} aria-hidden>›</span>}
     </div>
-  );
-}
-
-/**
- * A tiny column chart of one row's months, for the trend at a glance. Scaled to the row's own peak, so a small
- * category shows its shape as clearly as a big one. A month with nothing recorded is a faint tick; `selected` is
- * full colour, the others a little faded.
- */
-export function MiniBars({ values, selected, color, label, width = 96, height = 28 }: {
-  values: { key: string; value: number | null }[]; selected: string; color: string; label: string; width?: number; height?: number;
-}) {
-  const max = Math.max(...values.map((v) => v.value ?? 0), 0);
-  const slot = width / Math.max(values.length, 1);
-  const bar = Math.max(slot - 2, 1);
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className="block">
-      {values.map((v, i) => {
-        const x = i * slot + (slot - bar) / 2;
-        if (v.value === null || v.value <= 0 || max <= 0) return <rect key={v.key} x={x} y={height - 1.5} width={bar} height={1.5} rx={0.75} fill="var(--line)" />;
-        const h = Math.max((v.value / max) * height, 2);
-        return <rect key={v.key} x={x} y={height - h} width={bar} height={h} rx={1} fill={color} opacity={v.key === selected ? 1 : 0.45} />;
-      })}
-    </svg>
   );
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlyNote, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -278,6 +278,16 @@ export async function listSpendingCategories(userId: number): Promise<SpendingCa
   const { rows } = await pool.query(
     "SELECT id, name, position, archived, tier FROM spending_categories WHERE user_id = $1 ORDER BY position, id", [userId]);
   return rows.map((r) => ({ id: Number(r.id), name: r.name as string, position: Number(r.position), archived: r.archived as boolean, tier: (r.tier as Tier | null) ?? null }));
+}
+
+/** Every remark on an everyday category in a month. */
+export async function listMonthlyNotes(userId: number): Promise<MonthlyNote[]> {
+  const { rows } = await pool.query(
+    `SELECT n.category_id, to_char(n.month, 'YYYY-MM') AS month, n.note
+     FROM monthly_spending_notes n JOIN spending_categories c ON c.id = n.category_id WHERE c.user_id = $1`,
+    [userId],
+  );
+  return rows.map((r) => ({ categoryId: Number(r.category_id), month: r.month as string, note: r.note as string }));
 }
 
 /** Every month's amount of every everyday category. */

@@ -22,13 +22,17 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
   const user = await requireUser();
   if (!isMonth(month)) return { error: "Pick a month." };
   const { rows } = await pool.query("SELECT id, name FROM spending_categories WHERE user_id = $1", [user.id]);
-  const changes: { id: number; amount: number | null }[] = [];
+  const changes: { id: number; amount: number | null; note?: string | null }[] = [];
   for (const r of rows) {
     const raw = form.get(`a-${r.id}`);
     if (raw === null) continue; // not on the form (an archived category with nothing this month)
     const amount = String(raw).trim() === "" ? null : num(raw);
     if (amount !== null && !(amount >= 0 && amount < 1e16)) return { error: `Check the amount for ${r.name}.` };
-    changes.push({ id: Number(r.id), amount });
+    // `n-<id>` is the remark: empty clears it; absent (not on the form) leaves it as it is.
+    const rawNote = form.get(`n-${r.id}`);
+    const note = rawNote === null ? undefined : String(rawNote).replace(/\s+/g, " ").trim() || null;
+    if (note && note.length > 300) return { error: `Keep the remark for ${r.name} to 300 characters.` };
+    changes.push({ id: Number(r.id), amount, note });
   }
   const client = await pool.connect();
   try {
@@ -39,6 +43,11 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
         `INSERT INTO monthly_spending (category_id, month, amount) VALUES ($1, $2, $3)
          ON CONFLICT (category_id, month) DO UPDATE SET amount = EXCLUDED.amount`,
         [c.id, `${month}-01`, c.amount]);
+      if (c.note === null) await client.query("DELETE FROM monthly_spending_notes WHERE category_id = $1 AND month = $2", [c.id, `${month}-01`]);
+      else if (c.note) await client.query(
+        `INSERT INTO monthly_spending_notes (category_id, month, note) VALUES ($1, $2, $3)
+         ON CONFLICT (category_id, month) DO UPDATE SET note = EXCLUDED.note`,
+        [c.id, `${month}-01`, c.note]);
     }
     await client.query("COMMIT");
   } catch (err) {

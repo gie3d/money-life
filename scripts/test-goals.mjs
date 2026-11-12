@@ -76,4 +76,21 @@ assert.equal(ys[1].actualPaid, null); assert.equal(ys.at(-1).year, 2036);
   const r = retirementPath(pr, 1_200_000, "2056-01-01");
   assert.equal(r[0].date, "2036-01-01"); near(r[12].value, 1_080_000); near(r.at(-1).value, 0); assert.equal(r.at(-1).date, "2046-01-01");
 }
+// An asset the plan gave nothing joins at its first record: 0 before, then its value growing at its own rate.
+{
+  const { withJoins, path: pathOf, monthsBetween: mb } = await import("../lib/goals.ts");
+  const base = { startDate: "2024-01-01", startValue: 1000, targetDate: "2030-01-01", targetMode: "amount", targetAmount: 1, monthlySpending: null,
+    withdrawalRate: 0.04, expectedReturn: 0.06, inflation: 0, monthlyContribution: 0, contributionGrowth: 0 };
+  const e = (accountId, date, value) => ({ id: 0, accountId, date, value, contribution: 0, cost: value, note: null });
+  const plan = { ...base, assets: [{ accountId: 1, startValue: 1000, rate: 0, monthly: 0 }, { accountId: 2, startValue: 0, rate: 0.12, monthly: 0 }] };
+  const j = withJoins(plan, [[e(1, "2024-01-01", 1000)], [e(2, "2025-01-01", 500), e(2, "2025-06-01", 900)]]);
+  assert.equal(j.assets[0].join, undefined); // already in the plan
+  assert.deepEqual(j.assets[1].join, { k: 12, value: 500, date: "2025-01-01" });
+  const at = (k) => pathOf(j, 0, undefined, k).at(-1).value;
+  assert.equal(at(11), 1000);               // not there yet
+  assert.equal(at(12), 1500);               // arrives with its first value
+  assert.ok(Math.abs(at(24) - (1000 + 500 * 1.12)) < 1e-6); // then grows at its own rate
+  assert.equal(withJoins(plan, [[e(1, "2024-01-01", 1000)]]).assets[1].join, undefined); // no record yet: stays out
+  assert.equal(mb("2024-01-01", "2025-01-01"), 12);
+}
 console.log("goals ok");

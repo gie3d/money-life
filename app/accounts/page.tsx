@@ -8,10 +8,10 @@ import TrendCell from "@/components/TrendCell";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { colorFor } from "@/lib/palette";
-import { sixMonthTrend } from "@/lib/trend";
+import { balanceTrend, sixMonthTrend } from "@/lib/trend";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-import { labelOf, LIQUIDITY, TYPES } from "@/lib/types";
+import { isInvestment, labelOf, LIQUIDITY, TYPES } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Assets" };
 
@@ -26,7 +26,9 @@ export default async function AccountsPage() {
 
   // Each asset's (and category's) last 6 months for its small chart, coloured by how it performed.
   const today = new Date().toISOString().slice(0, 10);
-  const trendOf = (members: (typeof accounts)[number][]) => sixMonthTrend(members.map((a) => accountEntries(a, entries, trades, prices)), today);
+  // Investments have a return; cash and savings only a balance that rose or fell.
+  const trendOf = (members: (typeof accounts)[number][]) =>
+    (members.every((a) => !isInvestment(a)) ? balanceTrend : sixMonthTrend)(members.map((a) => accountEntries(a, entries, trades, prices)), today);
 
   // One group per category with assets, in the categories' own order; archived assets are listed but not summed.
   const active = accounts.filter((a) => !a.archived);
@@ -80,7 +82,7 @@ export default async function AccountsPage() {
                   <h2 className="truncate text-lg">{category.name}</h2>
                   <p className="text-xs text-ink-3">{labelOf(TYPES, category.type)} · {members.length} {members.length === 1 ? "asset" : "assets"}</p>
                 </div>
-                {headTrend && <TrendCell trend={headTrend} name={category.name} />}
+                {headTrend && <TrendCell trend={headTrend} name={category.name} currency={cur} />}
                 <div className="w-36 shrink-0 text-right sm:w-44">
                   <p className="num text-lg font-bold">{money(sum, cur)}</p>
                   <p className="num text-xs text-ink-3">
@@ -98,7 +100,7 @@ export default async function AccountsPage() {
                       <p className="truncate font-semibold">{a.name}{a.archived && <span className="ml-2 text-xs font-medium text-ink-3">archived</span>}</p>
                       <p className="text-xs text-ink-3">{labelOf(LIQUIDITY, a.liquidity)}</p>
                     </div>
-                    {trend && <TrendCell trend={trend} name={a.name} />}
+                    {trend && <TrendCell trend={trend} name={a.name} currency={cur} />}
                     <div className="w-36 shrink-0 text-right sm:w-44">
                       <p className="num font-semibold">{latest ? money(latest.value, cur) : "Nothing recorded yet"}</p>
                       {latest && (
