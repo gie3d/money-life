@@ -48,7 +48,7 @@ export default async function JournalPage() {
                 <Link href={`/journal/${e.id}`} className="card block space-y-1.5 p-5 hover:bg-surface-2 sm:p-6">
                   <p className="num flex flex-wrap items-center gap-x-3 text-xs text-ink-3">
                     <span>{day(e.date)}</span>
-                    {worth !== null && <span>{about.length > 0 ? `${about.length === 1 ? about[0] : `${about.length} assets`} were` : "Everything was"} worth {money(worth, user.currency)} then</span>}
+                    {worth !== null && <span>{about.length === 0 ? "Everything was" : about.length === 1 ? `${about[0]} was` : `${about.length} assets were`} worth {money(worth, user.currency)} then</span>}
                   </p>
                   <p className="text-lg font-bold">{mood && <span aria-label={mood.label} title={mood.label}>{mood.emoji} </span>}{e.title}</p>
                   <p className="text-sm text-ink-2">{excerpt(e.body)}</p>

@@ -35,9 +35,12 @@ export async function saveEntry(id: number | null, _: FormState, form: FormData)
       [id, user.id, date, title, m, body]);
     if (!rowCount) return { error: "That entry no longer exists." };
   }
-  // The assets it is about, only ones that are the user's own.
+  // The assets it is about, only ones that are the user's own. Every current asset ticked means everything, stored as
+  // none, so an asset added later counts too.
   await pool.query("DELETE FROM journal_entry_assets WHERE entry_id = $1", [entryId]);
-  if (assets.length > 0) {
+  const { rows: current } = await pool.query("SELECT id FROM accounts WHERE user_id = $1 AND NOT archived", [user.id]);
+  const all = current.length > 0 && current.every((r) => assets.includes(Number(r.id)));
+  if (assets.length > 0 && !all) {
     await pool.query(
       "INSERT INTO journal_entry_assets (entry_id, account_id) SELECT $1, a.id FROM accounts a WHERE a.user_id = $2 AND a.id = ANY($3::bigint[])",
       [entryId, user.id, assets]);

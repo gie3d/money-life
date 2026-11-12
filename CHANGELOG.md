@@ -19,6 +19,12 @@ in `package.json` to match.
   remove them. A removed category keeps its past months and can be put back.
 - Hobbies are free text: type any name, or tap one you've used.
 
+### Journal
+- An entry now shows what its money was worth then next to what it is worth now, with the change. Below the text,
+  a card shows how it was split between categories that day; open a category to see each asset, then and now.
+- Ticking every asset now means "everything", so an asset you add later counts too, and the entry no longer lists
+  every name.
+
 ## [1.2.0] - 2026-11-11
 
 ### Journal

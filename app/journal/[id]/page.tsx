@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteEntry } from "@/app/actions/journal";
 import Breadcrumb from "@/components/Breadcrumb";
+import JournalMoney from "@/components/JournalMoney";
 import ConfirmDelete from "@/components/ConfirmDelete";
 import Markdown from "@/components/Markdown";
 import { getJournalEntry } from "@/lib/data";
-import { day, money } from "@/lib/format";
+import { day, money, pct, tone } from "@/lib/format";
 import { journalMoney } from "@/lib/journal";
 import { requireUser } from "@/lib/session";
 import { MOODS } from "@/lib/types";
@@ -19,8 +20,11 @@ export default async function EntryPage({ params }: PageProps<"/journal/[id]">) 
   if (!entry) notFound();
   const today = new Date().toISOString().slice(0, 10);
   const mine = await journalMoney(user.id, today);
+  const everything = mine.isEverything(entry.accountIds);
   const about = mine.names(entry.accountIds);
   const worth = mine.worth(entry.date, entry.accountIds);
+  const now = mine.worth(today, entry.accountIds);
+  const assets = mine.breakdown(entry.date, entry.accountIds);
   const mood = MOODS.find((m) => m.id === entry.mood);
 
   return (
@@ -33,15 +37,16 @@ export default async function EntryPage({ params }: PageProps<"/journal/[id]">) 
             {mood && <span>{mood.emoji} {mood.label}</span>}
           </p>
           <h1 className="text-3xl">{entry.title}</h1>
-          {worth !== null && <p className="text-sm text-ink-3">{about.length > 0 ? "The assets this is about were" : "Everything you had was"} worth <span className="num font-semibold text-ink-2">{money(worth, user.currency)}</span> then.</p>}
-          {about.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5 pt-1" aria-label="Assets this is about">
-              {about.map((n) => <li key={n} className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold text-ink-2">{n}</li>)}
-            </ul>
+          {worth !== null && (
+            <p className="num text-sm text-ink-3">
+              {everything ? "Everything you had" : about.length === 1 ? about[0] : `${about.length} assets`}: <span className="font-semibold text-ink-2">{money(worth, user.currency)}</span> then
+              {now !== null && <> · {money(now, user.currency)} now{worth > 0 && <span className={tone(now - worth)}> ({pct((now - worth) / worth)})</span>}</>}
+            </p>
           )}
         </header>
-        <Markdown>{entry.body}</Markdown>
+        <div className="border-t border-line pt-4"><Markdown>{entry.body}</Markdown></div>
       </article>
+      {assets.length > 0 && <JournalMoney date={entry.date} assets={assets} everything={everything} currency={user.currency} />}
       <div className="flex justify-end gap-2">
         <ConfirmDelete action={deleteEntry.bind(null, entry.id)} title="Delete this entry?" message="It will be gone for good." triggerLabel="Delete entry" triggerClassName="btn btn-quiet">Delete</ConfirmDelete>
         <Link href={`/journal/${entry.id}/edit`} className="btn">Edit</Link>
