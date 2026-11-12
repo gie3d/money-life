@@ -1,7 +1,7 @@
 import "server-only";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
-import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlySpending, Spending, SpendingCategory, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -276,8 +276,8 @@ export async function listHobbySpending(userId: number): Promise<Spending[]> {
 /** The user's everyday categories in their own order, archived ones included. */
 export async function listSpendingCategories(userId: number): Promise<SpendingCategory[]> {
   const { rows } = await pool.query(
-    "SELECT id, name, position, archived FROM spending_categories WHERE user_id = $1 ORDER BY position, id", [userId]);
-  return rows.map((r) => ({ id: Number(r.id), name: r.name as string, position: Number(r.position), archived: r.archived as boolean }));
+    "SELECT id, name, position, archived, tier FROM spending_categories WHERE user_id = $1 ORDER BY position, id", [userId]);
+  return rows.map((r) => ({ id: Number(r.id), name: r.name as string, position: Number(r.position), archived: r.archived as boolean, tier: (r.tier as Tier | null) ?? null }));
 }
 
 /** Every month's amount of every everyday category. */

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { pool } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { isMonth, STARTER_CATEGORIES } from "@/lib/spending";
+import { isMonth, isTier, STARTER_CATEGORIES, STARTER_TIERS } from "@/lib/spending";
 import type { FormState } from "./auth";
 
 const num = (v: FormDataEntryValue | null) => {
@@ -78,6 +78,14 @@ export async function renameSpendingCategory(id: number, _: FormState, form: For
   revalidatePath("/spending");
 }
 
+/** Sets whether a category is a must, a need or a want; "none" clears it. */
+export async function setSpendingTier(id: number, tier: string) {
+  const user = await requireUser();
+  if (tier !== "none" && !isTier(tier)) return;
+  await pool.query("UPDATE spending_categories SET tier = $3 WHERE id = $1 AND user_id = $2", [id, user.id, tier === "none" ? null : tier]);
+  revalidatePath("/spending");
+}
+
 /** Takes a category off the list. With amounts recorded it is archived, so past months keep them; without, it goes. */
 export async function removeSpendingCategory(id: number) {
   const user = await requireUser();
@@ -114,11 +122,11 @@ export async function moveSpendingCategory(id: number, by: -1 | 1) {
 export async function startSpendingCategories() {
   const user = await requireUser();
   await pool.query(
-    `INSERT INTO spending_categories (user_id, name, position)
-     SELECT $1, name, pos FROM unnest($2::text[]) WITH ORDINALITY AS v(name, pos)
+    `INSERT INTO spending_categories (user_id, name, position, tier)
+     SELECT $1, name, pos, tier FROM unnest($2::text[], $3::text[]) WITH ORDINALITY AS v(name, tier, pos)
      WHERE NOT EXISTS (SELECT 1 FROM spending_categories WHERE user_id = $1)
      ON CONFLICT DO NOTHING`,
-    [user.id, STARTER_CATEGORIES]);
+    [user.id, STARTER_CATEGORIES, STARTER_CATEGORIES.map((c) => STARTER_TIERS[c] ?? null)]);
   revalidatePath("/spending");
 }
 

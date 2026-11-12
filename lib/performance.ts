@@ -58,7 +58,11 @@ export type Performance = {
  */
 export function accountPerformance(entries: Entry[], from: string, to: string): Performance | null {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-  const upTo = sorted.filter((e) => e.date <= to);
+  // Records from before it held anything (an asset priced for months before the first purchase or transfer in)
+  // aren't a starting balance: without this the window opens at 0 and the first money in is weighted by the few
+  // days it has been there, so a small move reads as a huge return.
+  const held = sorted.findIndex((e) => e.value !== 0 || e.contribution !== 0);
+  const upTo = sorted.slice(held < 0 ? 0 : held).filter((e) => e.date <= to);
   if (upTo.length === 0) return null;
 
   let open = [...upTo].reverse().find((e) => e.date <= from);

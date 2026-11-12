@@ -28,8 +28,12 @@ export type Bar = { key: string; label: string; href: string; segments: { label:
  * not only how much changed but what. The selected one is full colour, the others faded. A dashed line marks
  * `average` when given.
  */
-export function PeriodBars({ title, hint, bars, selected, currency, average, averageLabel }: {
+export function PeriodBars({ title, hint, bars, selected, currency, average, averageLabel, action, legend }: {
   title: string; hint: string; bars: Bar[]; selected: string; currency: string; average?: number | null; averageLabel?: string;
+  /** Something to the right of the title, such as a switch between views. */
+  action?: React.ReactNode;
+  /** What the colours are, for bars stacked by something with only a few values. */
+  legend?: { label: string; color: string }[];
 }) {
   const totals = bars.map((b) => b.segments.reduce((s, x) => s + x.value, 0));
   const max = Math.max(...totals, average ?? 0, 0);
@@ -38,9 +42,15 @@ export function PeriodBars({ title, hint, bars, selected, currency, average, ave
     <section className="card p-5 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4">
         <h2 className="text-lg">{title}</h2>
+        {action}
         {avg !== null && <p className="num text-xs text-ink-3"><span className="mr-1 inline-block w-4 border-t border-dashed border-ink-3 align-middle" />{averageLabel ?? "Average"} {money(average!, currency)}</p>}
       </div>
       <p className="text-xs text-ink-3">{hint}</p>
+      {legend && (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2">
+          {legend.map((l) => <li key={l.label} className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ background: l.color }} />{l.label}</li>)}
+        </ul>
+      )}
       {max <= 0 ? (
         <p className="py-8 text-center text-sm text-ink-3">Nothing to show yet.</p>
       ) : (

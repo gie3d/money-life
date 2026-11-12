@@ -4,6 +4,22 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.4.0] - 2026-11-12
+
+### Spending
+- Mark each everyday category as a **Must**, a **Need** or a **Want** (under Categories). The starter set comes
+  sorted; your existing categories start as "Not sorted" until you choose.
+- The Everyday page now shows the month split into Must, Need and Want against last month, and a switch on the
+  Month by month chart stacks the last 12 months by category or by tier. Each category in the table carries its tier.
+
+### Assets
+- Fixed an asset's 6-month return reading far too low (e.g. -104%) when it was funded by a transfer or first
+  purchase only days ago. Records from before it held anything no longer count as a starting balance of zero.
+- The small chart beside an asset now sets money moved in or out aside, so moving BTC to another wallet no longer
+  looks like a drop. The date it starts from shows at its left, and the percentage and the amount beside it are the
+  change since that date (the last 6 months, or the day a newer asset first held anything). That amount replaces the
+  value-against-cost one on each row; the investments total still uses cost.
+
 ## [1.3.0] - 2026-11-12
 
 ### Spending

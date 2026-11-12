@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-spending.mjs
 import assert from "node:assert/strict";
-import { amountOf, byCategory, change, compareMonth, compareYear, monthsBetween, monthTotals, shiftMonth } from "../lib/spending.ts";
+import { tierTotals, amountOf, byCategory, change, compareMonth, compareYear, monthsBetween, monthTotals, shiftMonth } from "../lib/spending.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} !~ ${b}`);
 
@@ -25,6 +25,12 @@ const sep = compareMonth(rows, "2026-09");
 near(sep.prevTotal, 6000); assert.equal(sep.averageMonths, 1); near(sep.average, 6000);
 assert.equal(compareMonth(rows, "2026-08").average, null);
 assert.equal(compareMonth([], "2026-11").average, null);
+
+// Must / need / want: grouped by each category's tier; an unsorted one has its own bucket.
+const cats = [{ id: 1, tier: "must" }, { id: 2, tier: "want" }, { id: 3, tier: null }];
+const tr = tierTotals(cats, [m(1, "2026-11", 100), m(2, "2026-11", 40), m(3, "2026-11", 7), m(1, "2026-10", 90)], "2026-11", "2026-10");
+assert.deepEqual(tr.map((t) => [t.id, t.total, t.before]), [["must", 100, 90], ["need", 0, 0], ["want", 40, 0], ["none", 7, 0]]);
+assert.equal(tierTotals(cats, [m(1, "2026-11", 1)], "2026-11", "2026-10")[0].before, null);
 
 // Hobbies: totals by hobby, largest first.
 let id = 0;

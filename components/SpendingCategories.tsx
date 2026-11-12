@@ -1,12 +1,14 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { addSpendingCategory, moveSpendingCategory, removeSpendingCategory, renameSpendingCategory, restoreSpendingCategory } from "@/app/actions/spending";
+import { addSpendingCategory, moveSpendingCategory, removeSpendingCategory, renameSpendingCategory, restoreSpendingCategory, setSpendingTier } from "@/app/actions/spending";
+import { TIERS } from "@/lib/spending";
+import type { Tier } from "@/lib/types";
 import ConfirmDelete from "./ConfirmDelete";
 import EditDialog from "./EditDialog";
 import type { FormState } from "@/app/actions/auth";
 
-export type CategoryItem = { id: number; name: string; color: string; months: number };
+export type CategoryItem = { id: number; name: string; color: string; months: number; tier: Tier | null };
 
 const icon = "grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent";
 
@@ -26,7 +28,7 @@ export default function SpendingCategories({ active, archived }: { active: Categ
     <section className="card space-y-4 p-5 sm:p-6">
       <div>
         <h2 className="text-lg">Categories</h2>
-        <p className="text-xs text-ink-3">Your own list. Removing one keeps what it had in past months.</p>
+        <p className="text-xs text-ink-3">Your own list. Mark each as a must, a need or a want to see them grouped. Removing one keeps what it had in past months.</p>
       </div>
 
       <ul className="divide-y divide-line">
@@ -34,7 +36,12 @@ export default function SpendingCategories({ active, archived }: { active: Categ
           <li key={c.id} className="flex items-center gap-1 py-1.5">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden />
             <span className="ml-1.5 min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
-            <span className="num mr-1 hidden text-xs text-ink-3 sm:inline">{c.months > 0 ? `${c.months} ${c.months === 1 ? "month" : "months"}` : "unused"}</span>
+            <select aria-label={`${c.name}: must, need or want`} value={c.tier ?? "none"} onChange={(e) => setSpendingTier(c.id, e.target.value)}
+              className="field !w-auto !py-1 text-xs">
+              <option value="none">Not sorted</option>
+              {TIERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+            <span className="num mx-1 hidden text-xs text-ink-3 sm:inline">{c.months > 0 ? `${c.months} ${c.months === 1 ? "month" : "months"}` : "unused"}</span>
             <button type="button" aria-label={`Move ${c.name} up`} disabled={i === 0} onClick={() => moveSpendingCategory(c.id, -1)} className={icon}>↑</button>
             <button type="button" aria-label={`Move ${c.name} down`} disabled={i === active.length - 1} onClick={() => moveSpendingCategory(c.id, 1)} className={icon}>↓</button>
             <EditDialog label={`Rename ${c.name}`} title="Rename category">

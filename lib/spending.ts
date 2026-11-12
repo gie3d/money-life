@@ -1,7 +1,33 @@
-import type { MonthlySpending, Spending } from "./types.ts";
+import type { MonthlySpending, Spending, Tier } from "./types.ts";
 
 /** What a new list of everyday categories starts with, if the user wants a start; any can be removed or added. */
 export const STARTER_CATEGORIES = ["Food & drinks", "Groceries", "Transport", "Shopping", "Home", "Health", "Family", "Going out", "Other"];
+
+/** The tier a starter category begins with; the user can change any of them. */
+export const STARTER_TIERS: Record<string, Tier> = {
+  "Food & drinks": "need", Groceries: "must", Transport: "must", Shopping: "want", Home: "must", Health: "must", Family: "need", "Going out": "want", Other: "want",
+};
+
+/** The three tiers in order, with the words and colours used wherever they show. */
+export const TIERS: { id: Tier; label: string; hint: string; color: string }[] = [
+  { id: "must", label: "Must", hint: "Can't skip it: rent, groceries, bills", color: "#2f6fed" },
+  { id: "need", label: "Need", hint: "Matters, with some room to adjust", color: "#e8a317" },
+  { id: "want", label: "Want", hint: "A choice: nice to have", color: "#d9534f" },
+];
+/** For a category that hasn't been sorted yet. */
+export const UNSORTED = { id: "none", label: "Not sorted", color: "#9aa0a6" } as const;
+
+export const isTier = (s: unknown): s is Tier => s === "must" || s === "need" || s === "want";
+
+/** What the categories in each tier came to in `month`, with the same for `prev` (null when that month is empty). */
+export function tierTotals(
+  categories: { id: number; tier: Tier | null }[], rows: MonthlySpending[], month: string, prev: string,
+) {
+  const tierOf = new Map(categories.map((c) => [c.id, c.tier ?? "none"]));
+  const sumFor = (m: string, t: string) => rows.filter((r) => r.month === m && (tierOf.get(r.categoryId) ?? "none") === t).reduce((s, r) => s + r.amount, 0);
+  const anyPrev = rows.some((r) => r.month === prev);
+  return [...TIERS, UNSORTED].map((t) => ({ ...t, total: sumFor(month, t.id), before: anyPrev ? sumFor(prev, t.id) : null }));
+}
 
 /** Hobbies offered when adding one; any other name can be typed. */
 export const HOBBY_CATEGORIES = ["Travel", "Gadgets", "Sports", "Photography", "Games", "Music", "Books", "Collecting", "Other"];

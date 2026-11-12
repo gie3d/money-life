@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import MonthSpendingForm from "@/components/MonthSpendingForm";
 import SectionTabs from "@/components/SectionTabs";
 import SpendingCategories from "@/components/SpendingCategories";
-import { CategoryBars, Change, MiniBars, PeriodBars, PeriodSwitcher, Tile } from "@/components/SpendingCharts";
+import BarsSwitch from "@/components/BarsSwitch";
+import { CategoryBars, Change, MiniBars, PeriodSwitcher, Tile } from "@/components/SpendingCharts";
 import { startSpendingCategories } from "@/app/actions/spending";
 import { listMonthlySpending, listSpendingCategories } from "@/lib/data";
 import { money, monthLabel } from "@/lib/format";
 import { requireUser } from "@/lib/session";
-import { amountOf, change, compareMonth, isMonth, monthsBetween, shiftMonth, STARTER_CATEGORIES } from "@/lib/spending";
-import { CATEGORY_COLORS } from "@/lib/types";
+import { amountOf, change, compareMonth, isMonth, monthsBetween, shiftMonth, STARTER_CATEGORIES, tierTotals, TIERS, UNSORTED } from "@/lib/spending";
+import { CATEGORY_COLORS, type Tier } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Everyday spending" };
 
@@ -33,7 +34,7 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
   const monthsOf = (id: number) => amounts.filter((a) => a.categoryId === id).length;
   const active = categories.filter((c) => !c.archived);
   const archived = categories.filter((c) => c.archived);
-  const item = (c: (typeof categories)[number]) => ({ id: c.id, name: c.name, color: colorOf.get(c.id)!, months: monthsOf(c.id) });
+  const item = (c: (typeof categories)[number]) => ({ id: c.id, name: c.name, color: colorOf.get(c.id)!, months: monthsOf(c.id), tier: c.tier });
 
   const cmp = compareMonth(amounts, month);
   // On the form: every category on the list, and a removed one only for a month it has an amount in.
@@ -67,6 +68,18 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
   };
   const tableCats = categories.filter((c) => !c.archived || tableMonths.some((m) => has(c.id, m)));
   const against = monthLabel(cmp.prev);
+
+  // Must, need and want: the same month and the 12 months, grouped by each category's tier.
+  const tierRows = tierTotals(categories, amounts, month, cmp.prev);
+  const tierOf = new Map(categories.map((c) => [c.id, c.tier ?? "none"]));
+  const tierBars = monthsBetween(shiftMonth(month, -11), month).map((m, i) => ({
+    key: m, label: shortMonth(m, i === 0), href: href(m),
+    segments: [...TIERS, UNSORTED].map((t) => ({
+      label: t.label, color: t.color,
+      value: amounts.filter((a) => a.month === m && (tierOf.get(a.categoryId) ?? "none") === t.id).reduce((s, a) => s + a.amount, 0),
+    })),
+  }));
+  const tierName = (t: Tier | null) => TIERS.find((x) => x.id === t)?.label;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -114,8 +127,15 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
             <CategoryBars title={`Where it went in ${monthLabel(month)}`} rows={rows} currency={cur} against={`vs ${against}`} />
           </div>
 
-          <PeriodBars title="Month by month" hint="The 12 months up to the one shown, by category. Tap a month to open it."
-            bars={bars} selected={month} currency={cur} average={cmp.average} averageLabel="6-month average" />
+          <CategoryBars title={`Must, need, want in ${monthLabel(month)}`} rows={tierRows.filter((t) => t.total > 0 || t.id !== "none").map((t) => ({ category: t.label, color: t.color, total: t.total, before: t.before }))} currency={cur} against={`vs ${against}`} />
+
+          <BarsSwitch title="Month by month" selected={month} currency={cur} average={cmp.average} averageLabel="6-month average"
+            views={[
+              { id: "category", label: "By category", hint: "The 12 months up to the one shown, by category. Tap a month to open it.", bars },
+              { id: "tier", label: "Must, need, want", bars: tierBars,
+                hint: tierRows.find((t) => t.id === "none")!.total > 0 ? "Categories not sorted yet show in grey; sort them under Categories below." : "The 12 months up to the one shown, by tier. Tap a month to open it.",
+                legend: [...TIERS, UNSORTED].map((t) => ({ label: t.label, color: t.color })) },
+            ]} />
 
           <section className="card p-5 sm:p-6">
             <h2 className="text-lg">Each category, month by month</h2>
@@ -137,7 +157,7 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
                     return (
                       <tr key={c.id}>
                         <td className="py-2 pr-3 text-left">
-                          <span className={`flex items-center gap-2 font-semibold ${c.archived ? "text-ink-3" : ""}`}><span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf.get(c.id) }} />{c.name}</span>
+                          <span className={`flex items-center gap-2 font-semibold ${c.archived ? "text-ink-3" : ""}`}><span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf.get(c.id) }} />{c.name}{c.tier && <span className="rounded-full bg-surface-2 px-2 text-[10px] font-semibold text-ink-3">{tierName(c.tier)}</span>}</span>
                         </td>
                         <td className="py-2 pl-3"><MiniBars values={trendOf(c.id)} selected={month} color={colorOf.get(c.id)!} label={trendLabel(c.name, c.id)} /></td>
                         {tableMonths.map((m) => (

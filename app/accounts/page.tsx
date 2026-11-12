@@ -70,7 +70,7 @@ export default async function AccountsPage() {
             <span>Total <span className="num font-semibold text-ink">{money(total, cur)}</span> across {active.length} {active.length === 1 ? "asset" : "assets"}</span>
             {invs.length > 0 && <span>· investments <span className={`num font-semibold ${tone(invPl)}`}>{signedMoney(invPl, cur)} ({pct(invCost > 0 ? invPl / invCost : null)})</span></span>}
             {archivedCount > 0 && <span>· {archivedCount} archived, not counted</span>}
-            <Info label="About the small charts">Each small chart shows the last 6 months: green for a gain, red for a loss, with money added or taken out set aside. Profit and loss are for investments: their value against what they cost, fees included.</Info>
+            <Info label="About the small charts">Each small chart starts on the date at its left, the last 6 months or the day an asset first held anything. The percentage and the amount beside it are the change since that date: green for a gain, red for a loss, with money added or taken out set aside. The investments total above is different: value against what they cost, fees included.</Info>
           </p>
           {groups.map(({ category, members, sum, headTrend }) => (
             <section key={category.id} className="card divide-y divide-line overflow-hidden">
@@ -83,7 +83,10 @@ export default async function AccountsPage() {
                 {headTrend && <TrendCell trend={headTrend} name={category.name} />}
                 <div className="w-36 shrink-0 text-right sm:w-44">
                   <p className="num text-lg font-bold">{money(sum, cur)}</p>
-                  {total > 0 && <p className="num text-xs text-ink-3">{((sum / total) * 100).toFixed(1)}% of total</p>}
+                  <p className="num text-xs text-ink-3">
+                    {headTrend && <span className={`font-semibold ${tone(headTrend.gain)}`} title={`Since ${day(headTrend.since)}`}>{signedMoney(headTrend.gain, cur)}{total > 0 && " · "}</span>}
+                    {total > 0 && `${((sum / total) * 100).toFixed(1)}% of total`}
+                  </p>
                 </div>
               </div>
               {members.map((a) => {
@@ -100,7 +103,7 @@ export default async function AccountsPage() {
                       <p className="num font-semibold">{latest ? money(latest.value, cur) : "Nothing recorded yet"}</p>
                       {latest && (
                         <p className="num text-xs text-ink-3">
-                          {latest.pl !== null && <span className={`font-semibold ${tone(latest.pl)}`}>{signedMoney(latest.pl, cur)} · </span>}
+                          {trend && <span className={`font-semibold ${tone(trend.gain)}`} title={`Since ${day(trend.since)}`}>{signedMoney(trend.gain, cur)} · </span>}
                           {day(latest.lastDate)}
                         </p>
                       )}

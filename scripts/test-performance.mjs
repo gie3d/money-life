@@ -48,4 +48,8 @@ assert.deepEqual(resample(pts, "year", "2027-03-01").map((p) => p.date), ["2026-
 assert.equal(periodStart("YTD", "2026-10-26"), "2026-01-01");
 assert.equal(periodStart("3M", "2026-10-26"), "2026-07-26");
 assert.equal(periodStart("ALL", "2026-10-26"), null);
+// An asset priced for months before the first money went in is not "opened at 0": 4 days after a 45,743 transfer in,
+// at 44,832, it is -2%, not -100% from a tiny day-weighted base.
+p = accountPerformance([e("2026-10-24", 0), e("2026-11-08", 45743, 45743), e("2026-11-12", 44832)], "2026-05-12", "2026-11-12");
+near(p.start, 45743); near(p.gain, -911); near(p.returnPct, -911 / 45743);
 console.log("ok");

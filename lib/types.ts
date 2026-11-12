@@ -230,7 +230,10 @@ export type JournalEntry = {
 };
 
 /** A category of everyday spending, the user's own. An archived one is off the list but keeps its past months. */
-export type SpendingCategory = { id: number; name: string; position: number; archived: boolean };
+/** How necessary an everyday category is: a must can't be skipped, a need matters but has room, a want is a choice. */
+export type Tier = "must" | "need" | "want";
+
+export type SpendingCategory = { id: number; name: string; position: number; archived: boolean; tier: Tier | null };
 
 /** What one everyday category came to in one month ("2026-11"). */
 export type MonthlySpending = { categoryId: number; month: string; amount: number };
