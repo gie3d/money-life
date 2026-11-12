@@ -17,6 +17,9 @@ in `package.json` to match.
   amount under it.
 
 ### Goals
+- The goal chart on Home is drawn like the one on the goal page: actual in green above zero and red below, the plan
+  dashed, carrying on as planned dotted, and the target line once the chart reaches it. Its legend now says Plan
+  where it said Target.
 - The plan table on a goal is rebuilt with one row per asset, grouped under its category (a row for the category adds its assets up, and a click on it opens or folds its assets, folded to start): its expected growth a year, the amount to put in a
   month, what that makes in a year (expected) against what actually went in over the last 12 months, and then a column
   per year with the value the plan expected at its end, the actual value and the difference as a percentage. It

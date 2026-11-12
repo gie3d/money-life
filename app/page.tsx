@@ -2,6 +2,7 @@ import Link from "next/link";
 import ForecastChart from "@/components/ForecastChart";
 import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
+import { signSwatch } from "@/components/Sign";
 import StaleNotice from "@/components/StaleNotice";
 import { listAccounts, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { goalAssets } from "@/lib/goal-data";
@@ -214,11 +215,12 @@ export default async function Home() {
                     <p className="num text-xs text-ink-3">
                       {money(s.actual, cur)} of {money(milestone, cur)} · {final ? "target" : "3-year mark"} {day(date)}
                     </p>
-                    <GoalMiniChart points={chart} today={today} currency={cur} label={`${goal.name}: your value against the plan until ${day(date)}`} />
-                    <p className="flex gap-4 text-xs text-ink-3">
-                      <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-brand" />Actual</span>
-                      <span className="flex items-center gap-1.5"><span className="w-4 border-t-2 border-dotted border-brand" />Carrying on</span>
-                      <span className="flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed border-ink-3" />Target</span>
+                    <GoalMiniChart points={chart} today={today} currency={cur} target={final ? milestone : null} label={`${goal.name}: your value against the plan until ${day(date)}`} />
+                    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
+                      <span className="flex items-center gap-1.5"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Actual</span>
+                      <span className="flex items-center gap-1.5"><span className="w-5 border-t-2 border-dashed border-ink-3" />Plan</span>
+                      <span className="flex items-center gap-1.5"><span className={`h-0.5 w-5 ${signSwatch}`} />Carrying on as planned</span>
+                      {final && <span className="flex items-center gap-1.5"><span className="w-5 border-t-2 border-go" />Target</span>}
                     </p>
                   </Link>
                 </li>
