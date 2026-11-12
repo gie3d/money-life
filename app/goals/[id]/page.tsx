@@ -97,6 +97,22 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
     })
     .sort((x, y) => order.indexOf(x.id) - order.indexOf(y.id));
   // A group's year: values add up; growth figures are left out, since they don't add.
+  // Years shown in the plan table: the latest few, paged with ‹ ›, or all of them.
+  const WINDOW = 3;
+  const lastIdx = yearCols.length - 1;
+  const showAll = sp.yrs === "all" || yearCols.length <= WINDOW;
+  const picked = yearCols.findIndex((c) => String(c.year) === sp.yrs);
+  const endIdx = showAll || picked < 0 ? lastIdx : Math.max(picked, WINDOW - 1);
+  const startIdx = showAll ? 0 : Math.max(endIdx - WINDOW + 1, 0);
+  const shown = yearCols.map((y, i) => ({ ...y, i })).filter((y) => y.i >= startIdx && y.i <= endIdx);
+  const yearsHref = (end: number | "all") => {
+    const q = new URLSearchParams();
+    if (typeof sp.v === "string") q.set("v", sp.v);
+    if (end === "all") q.set("yrs", "all");
+    else if (end !== lastIdx) q.set("yrs", String(yearCols[end].year));
+    const qs = q.toString();
+    return `/goals/${id}${qs ? `?${qs}` : ""}`;
+  };
   const sumYear = (rows: typeof planRows, i: number) => ({
     plan: rows.reduce((t, r) => t + r.years[i].plan, 0),
     actual: rows.reduce((t, r) => t + r.years[i].actual, 0),
@@ -245,62 +261,72 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
               {plan.targetMode === "spending" && ` · inflation ${pct(plan.inflation)}`}
             </p>
           </div>
+          <p className="px-4 pb-2 text-xs text-ink-3 sm:px-6">
+            In each year, top to bottom: <span className="text-ink-2">plan</span> · <span className="font-semibold text-ink">actual</span> · <span className="font-semibold text-go-text">difference</span>.
+          </p>
+          {yearCols.length > WINDOW && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-3 text-xs sm:px-6">
+              <span className="num text-ink-3">{showAll ? `All ${yearCols.length} years` : `${shown[0].year}–${shown.at(-1)!.year} of ${yearCols[0].year}–${yearCols[lastIdx].year}`}</span>
+              {!showAll && (
+                <>
+                  {startIdx > 0 ? <Link href={yearsHref(endIdx - 1)} scroll={false} className="font-semibold text-brand">‹ Earlier</Link> : <span className="text-ink-3 opacity-50">‹ Earlier</span>}
+                  {endIdx < lastIdx ? <Link href={yearsHref(endIdx + 1)} scroll={false} className="font-semibold text-brand">Later ›</Link> : <span className="text-ink-3 opacity-50">Later ›</span>}
+                </>
+              )}
+              <Link href={showAll ? yearsHref(lastIdx) : yearsHref("all")} scroll={false} className="font-semibold text-brand">{showAll ? "Show the latest 3" : "Show all years"}</Link>
+            </div>
+          )}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ minWidth: `${40 + yearCols.length * 27}rem` }}>
+            <table className="w-full text-sm" style={{ minWidth: `${36 + shown.length * 10}rem` }}>
               <thead>
                 <tr className="eyebrow text-left">
-                  <th className="py-2 pl-4 sm:pl-6" rowSpan={2}>Asset</th>
-                  <th className="py-2 text-right" rowSpan={2}>Growth a year</th>
-                  <th className="py-2 text-right" rowSpan={2}>Put in a month</th>
-                  <th className="py-2 text-right" rowSpan={2}>Put in a year</th>
-                  {yearCols.map((y) => (
-                    <th key={y.year} className="py-1.5 text-center" colSpan={3}>{y.year}{y.toDate && <span className="ml-1 font-normal normal-case">to {day(y.to, false)}</span>}</th>
+                  <th className={`${stick} bg-surface py-2 pl-4 sm:pl-6`}>Asset</th>
+                  <th className="py-2 text-right">Growth a year</th>
+                  <th className="py-2 text-right">Put in a month</th>
+                  <th className="py-2 text-right">Put in a year</th>
+                  {shown.map((y) => (
+                    <th key={y.year} className="py-2 pl-3 text-right">{y.year}{y.toDate && <span className="ml-1 font-normal normal-case">to {day(y.to, false)}</span>}</th>
                   ))}
-                </tr>
-                <tr className="eyebrow">
-                  {yearCols.flatMap((y) => [
-                    <th key={`${y.year}-p`} className="py-1.5 text-right">Plan</th>,
-                    <th key={`${y.year}-a`} className="py-1.5 text-right">Actual</th>,
-                    <th key={`${y.year}-d`} className="py-1.5 text-right">Difference</th>,
-                  ])}
                 </tr>
               </thead>
               {groupBy(planRows, (r) => r.categoryId).map(({ key, items }) => (
                 <tbody key={key}>
                   <tr className="bg-surface-2 font-bold">
-                    <td className="py-2.5 pl-4 sm:pl-6" colSpan={2}>
+                    <td className={`${stick} bg-surface-2 py-2.5 pl-4 sm:pl-6`}>
                       <span className="inline-flex items-center gap-2">
                         <span className="size-2.5 rounded-full" style={{ background: items[0].color }} />
                         {items[0].category}
                       </span>
                     </td>
+                    <td />
                     <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0), cur)}</td>
                     <td className="num py-2.5 text-right">{money(items.reduce((t, r) => t + r.monthly, 0) * 12, cur)}</td>
-                    {yearCols.flatMap((y, i) => yearCells(`${key}-${y.year}`, sumYear(items, i), cur, false))}
+                    {shown.map((y) => yearCell(`${key}-${y.year}`, sumYear(items, y.i), cur, false))}
                   </tr>
                   {items.map((r) => (
                     <tr key={r.id}>
-                      <td className="py-2.5 pl-8 font-semibold sm:pl-10"><Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link></td>
+                      <td className={`${stick} bg-surface py-2.5 pl-8 font-semibold sm:pl-10`}><Link href={`/accounts/${r.id}`} className="hover:underline">{r.name}</Link></td>
                       <td className="num py-2.5 text-right">{pct(r.rate)}</td>
                       <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly, cur) : "—"}</td>
                       <td className="num py-2.5 text-right">{r.monthly > 0 ? money(r.monthly * 12, cur) : "—"}</td>
-                      {r.years.flatMap((c, i) => yearCells(`${r.id}-${yearCols[i].year}`, c, cur, true))}
+                      {shown.map((y) => yearCell(`${r.id}-${y.year}`, r.years[y.i], cur, true))}
                     </tr>
                   ))}
                 </tbody>
               ))}
               <tfoot>
                 <tr className="font-bold">
-                  <td className="py-3 pl-4 sm:pl-6" colSpan={2}>Total</td>
+                  <td className={`${stick} bg-surface py-3 pl-4 sm:pl-6`}>Total</td>
+                  <td />
                   <td className="num py-3 text-right">{money(plan.monthlyContribution, cur)}</td>
                   <td className="num py-3 text-right">{money(plan.monthlyContribution * 12, cur)}</td>
-                  {yearCols.flatMap((y, i) => yearCells(`total-${y.year}`, sumYear(planRows, i), cur, false))}
+                  {shown.map((y) => yearCell(`total-${y.year}`, sumYear(planRows, y.i), cur, false))}
                 </tr>
               </tfoot>
             </table>
           </div>
           <p className="px-4 pb-4 pt-2 text-xs text-ink-3 sm:px-6">
-            Each year compares the value at its end (today, for this year) with the plan. Under the values: the growth the plan expected over that stretch, and the return the asset actually made, with money put in or taken out set aside.
+            Each year shows three lines: the plan&apos;s value at its end (today, for this year), the actual value, and the difference. Under the first two: the growth the plan expected over that stretch, and the return the asset actually made, with money put in or taken out set aside.
           </p>
         </section>
 
@@ -353,15 +379,20 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/goa
 
 type YearCell = { plan: number; actual: number; planGrowth: number | null; actualReturn: number | null };
 
-/** The three cells of one year: plan, actual and the difference, with the growth under each value where it applies. */
-function yearCells(key: string, c: YearCell, cur: string, strong: boolean) {
+/** The first column of the plan table stays put while the years scroll. */
+const stick = "sticky left-0 z-10 border-r border-line";
+
+/** One year in one cell: the plan, the actual and the difference, with the growth under each value where it applies. */
+function yearCell(key: string, c: YearCell, cur: string, strong: boolean) {
   const diff = c.actual - c.plan;
   const sub = (f: number | null) => (f === null ? null : <span className="block text-xs font-normal text-ink-3">{f >= 0 ? "+" : "−"}{Math.abs(f * 100).toFixed(1)}%</span>);
-  return [
-    <td key={`${key}-p`} className="num py-2.5 text-right text-ink-2">{money(c.plan, cur)}{sub(c.planGrowth)}</td>,
-    <td key={`${key}-a`} className={`num py-2.5 text-right ${strong ? "font-semibold" : ""}`}>{money(c.actual, cur)}{sub(c.actualReturn)}</td>,
-    <td key={`${key}-d`} className={`num py-2.5 text-right ${tone(diff)}`}>{signedMoney(diff, cur)}</td>,
-  ];
+  return (
+    <td key={key} className="num py-2.5 pl-3 text-right align-top">
+      <span className="block text-ink-2" title="Plan">{money(c.plan, cur)}</span>{sub(c.planGrowth)}
+      <span className={`mt-1 block ${strong ? "font-semibold" : ""}`} title="Actual">{money(c.actual, cur)}</span>{sub(c.actualReturn)}
+      <span className={`mt-1 block text-xs font-semibold ${tone(diff)}`} title="Difference">{signedMoney(diff, cur)}</span>
+    </td>
+  );
 }
 
 function Figure({ label, value, hint, cls = "" }: { label: string; value: string; hint?: string; cls?: string }) {

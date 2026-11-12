@@ -12,6 +12,11 @@ in `package.json` to match.
 - The Everyday page now shows the month split into Must, Need and Want against last month, and a switch on the
   Month by month chart stacks the last 12 months by category or by tier. Each category in the table carries its tier.
 
+### Goals
+- The plan table on a goal is much narrower: each year is one column with the plan, the actual and the difference
+  stacked, the asset names stay in view while you scroll, and it shows the latest 3 years, with Earlier / Later
+  to page through the rest or "Show all years".
+
 ### Assets
 - Fixed an asset's 6-month return reading far too low (e.g. -104%) when it was funded by a transfer or first
   purchase only days ago. Records from before it held anything no longer count as a starting balance of zero.
