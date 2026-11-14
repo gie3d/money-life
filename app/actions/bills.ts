@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { pool } from "@/lib/db";
-import { requireUser } from "@/lib/session";
+import { requireEditable } from "@/lib/session";
 import { EVERY } from "@/lib/bills";
 import type { FormState } from "./auth";
 
@@ -37,7 +37,7 @@ async function readBill(userId: number, form: FormData) {
 }
 
 export async function createBill(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const b = await readBill(user.id, form);
   if ("error" in b) return b;
   await pool.query(
@@ -49,7 +49,7 @@ export async function createBill(_: FormState, form: FormData): Promise<FormStat
 }
 
 export async function updateBill(billId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const b = await readBill(user.id, form);
   if ("error" in b) return b;
   const { rowCount } = await pool.query(
@@ -62,7 +62,7 @@ export async function updateBill(billId: number, _: FormState, form: FormData): 
 }
 
 export async function deleteBill(billId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM bills WHERE id = $1 AND user_id = $2", [billId, user.id]);
   revalidatePath("/bills");
 }
@@ -72,7 +72,7 @@ export async function deleteBill(billId: number) {
  * `keep-<id>` present when the bill stays in. Only the plan columns change; the bills themselves don't.
  */
 export async function saveBillPlan(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const { rows } = await pool.query("SELECT id, amount FROM bills WHERE user_id = $1", [user.id]);
   const client = await pool.connect();
   try {
@@ -101,7 +101,7 @@ export async function saveBillPlan(_: FormState, form: FormData): Promise<FormSt
 
 /** Clears the what-if: every bill back to its current amount and kept. */
 export async function resetBillPlan() {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("UPDATE bills SET plan_amount = NULL, plan_drop = false WHERE user_id = $1", [user.id]);
   revalidatePath("/bills");
 }

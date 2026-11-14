@@ -7,7 +7,7 @@ import { getAccount, listAccounts, listEntries, listPrices, listTradeParts, list
 import { deriveTrades, replay, TRANSFER_ID_BASE } from "@/lib/investment";
 import { money } from "@/lib/format";
 import { holdings } from "@/lib/portfolio";
-import { requireUser } from "@/lib/session";
+import { requireEditable, requireUser } from "@/lib/session";
 import { HEX, isInvestment, LIQUIDITY, TYPES, type Total, type Trade, type Transfer } from "@/lib/types";
 import type { FormState } from "./auth";
 
@@ -17,7 +17,7 @@ const num = (v: FormDataEntryValue | null) => {
 };
 
 export async function createAccount(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   const categoryId = Number(form.get("category"));
   const liquidity = String(form.get("liquidity") ?? "");
@@ -41,7 +41,7 @@ export async function createAccount(_: FormState, form: FormData): Promise<FormS
  * deposits on the same day add up. Balances recorded after the date are left as they were recorded.
  */
 export async function addEntry(accountId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const account = await getAccount(user.id, accountId);
   if (!account || isInvestment(account)) return { error: "That asset no longer exists." };
 
@@ -76,7 +76,7 @@ export async function addEntry(accountId: number, _: FormState, form: FormData):
 }
 
 export async function deleteEntry(entryId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query(
     "DELETE FROM entries e USING accounts a WHERE e.id = $1 AND a.id = e.account_id AND a.user_id = $2",
     [entryId, user.id],
@@ -89,7 +89,7 @@ export async function deleteEntry(entryId: number) {
  * one tracked the same way (investment or balance), or those records would no longer be shown or counted.
  */
 export async function updateAccount(accountId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const account = await getAccount(user.id, accountId);
   if (!account) return { error: "That asset no longer exists." };
   const name = String(form.get("name") ?? "").trim();
@@ -122,7 +122,7 @@ async function hasRecords(accountId: number): Promise<boolean> {
 
 /** Saves the free-text notes of an asset; empty clears them. */
 export async function updateNotes(accountId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
   if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
   const { rowCount } = await pool.query("UPDATE accounts SET notes = $3 WHERE id = $1 AND user_id = $2", [accountId, user.id, notes || null]);
@@ -131,20 +131,20 @@ export async function updateNotes(accountId: number, _: FormState, form: FormDat
 }
 
 export async function setArchived(accountId: number, archived: boolean) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("UPDATE accounts SET archived = $3 WHERE id = $1 AND user_id = $2", [accountId, user.id, archived]);
   revalidatePath("/", "layout");
 }
 
 export async function deleteAccount(accountId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM accounts WHERE id = $1 AND user_id = $2", [accountId, user.id]);
   revalidatePath("/", "layout");
   redirect("/accounts");
 }
 
 export async function createCategory(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim().replace(/\s+/g, " ");
   const type = String(form.get("type") ?? "");
   if (!name) return { error: "Give the category a name." };
@@ -162,7 +162,7 @@ export async function createCategory(_: FormState, form: FormData): Promise<Form
 }
 
 export async function renameCategory(categoryId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim().replace(/\s+/g, " ");
   if (!name || name.length > 40) return { error: "Use 1 to 40 characters." };
   try {
@@ -174,7 +174,7 @@ export async function renameCategory(categoryId: number, _: FormState, form: For
 }
 
 export async function deleteCategory(categoryId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   // Refuses while any asset uses it (the foreign key is RESTRICT); the UI hides the button then.
   await pool.query(
     "DELETE FROM categories c WHERE c.id = $1 AND c.user_id = $2 AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.category_id = c.id)",
@@ -252,7 +252,7 @@ async function readTransfer(userId: number, fromAccountId: number, form: FormDat
 }
 
 export async function addTrade(accountId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
   const p = await listTradeParts(user.id);
 
@@ -300,7 +300,7 @@ export async function addTrade(accountId: number, _: FormState, form: FormData):
 }
 
 export async function updateTrade(accountId: number, tradeId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   if (!p.trades.some((x) => x.id === tradeId && x.accountId === accountId)) return { error: "That trade no longer exists." };
   const t = readTrade(form);
@@ -318,7 +318,7 @@ export async function updateTrade(accountId: number, tradeId: number, _: FormSta
 }
 
 export async function deleteTrade(accountId: number, tradeId: number, _: FormState): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   // Removing a buy can leave a later sale or transfer with nothing to take.
   if (!consistent(p, { trades: p.trades.filter((t) => t.id !== tradeId) })) return { error: "Delete the later sales or transfers first: they depend on this purchase." };
@@ -330,7 +330,7 @@ export async function deleteTrade(accountId: number, tradeId: number, _: FormSta
 }
 
 export async function updateTotal(accountId: number, totalId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   if (!p.totals.some((x) => x.id === totalId && x.accountId === accountId)) return { error: "That total no longer exists." };
   const s = readTotal(form);
@@ -347,7 +347,7 @@ export async function updateTotal(accountId: number, totalId: number, _: FormSta
 }
 
 export async function deleteTotal(accountId: number, totalId: number, _: FormState): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   if (!consistent(p, { totals: p.totals.filter((x) => x.id !== totalId) })) return { error: TOO_MUCH };
   await pool.query("DELETE FROM totals s USING accounts a WHERE s.id = $1 AND a.id = s.account_id AND a.user_id = $2", [totalId, user.id]);
@@ -356,7 +356,7 @@ export async function deleteTotal(accountId: number, totalId: number, _: FormSta
 
 /** Changes a transfer. It can be edited from either asset; the sender stays the asset it was sent from. */
 export async function updateTransfer(transferId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   const old = p.transfers.find((x) => x.id === transferId);
   if (!old) return { error: "That transfer no longer exists." };
@@ -374,7 +374,7 @@ export async function updateTransfer(transferId: number, _: FormState, form: For
 }
 
 export async function deleteTransfer(transferId: number, _: FormState): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const p = await listTradeParts(user.id);
   // The receiver may already have sold or sent on the units that arrived.
   if (!consistent(p, { transfers: p.transfers.filter((x) => x.id !== transferId) })) {
@@ -403,7 +403,7 @@ export async function updatePrice(accountId: number, priceId: number | null, _: 
   // A price that came from a trade has no row of its own yet: saving it records one for that day.
   if (priceId === null) return setPrice(accountId, undefined, form);
 
-  const user = await requireUser();
+  const user = await requireEditable();
   if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
   const date = String(form.get("date") ?? "");
   const price = num(form.get("price"));
@@ -425,7 +425,7 @@ export async function updatePrice(accountId: number, priceId: number | null, _: 
 }
 
 export async function deletePrice(priceId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query(
     "DELETE FROM prices p USING accounts a WHERE p.id = $1 AND a.id = p.account_id AND a.user_id = $2",
     [priceId, user.id],
@@ -434,7 +434,7 @@ export async function deletePrice(priceId: number) {
 }
 
 export async function setCategoryColor(categoryId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const color = String(form.get("color") ?? "");
   if (!HEX.test(color)) return { error: "Pick a colour." };
   await pool.query("UPDATE categories SET color = $3 WHERE id = $1 AND user_id = $2", [categoryId, user.id, color.toLowerCase()]);
@@ -451,7 +451,8 @@ export async function updateValues(_: FormState, form: FormData): Promise<FormSt
   if (!isDate(date)) return { error: "Pick a date." };
 
   const accounts = await listAccounts(user.id);
-  const known = holdings(accounts, await listEntries(user.id), await listTrades(user.id), await listPrices(user.id));
+  // In fiat, as typed: with BTC Standard on, the stored values are what the numbers are compared with.
+  const known = holdings(accounts, await listEntries(user.id, undefined, true), await listTrades(user.id, undefined, true), await listPrices(user.id, undefined, true));
   const changes: { account: (typeof accounts)[number]; value: number }[] = [];
 
   for (const account of accounts) {

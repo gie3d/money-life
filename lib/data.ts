@@ -1,4 +1,5 @@
 import "server-only";
+import { btcFx } from "./btc";
 import { pool } from "./db";
 import { deriveTrades } from "./investment";
 import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlyNote, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
@@ -46,13 +47,15 @@ export async function getAccount(userId: number, id: number): Promise<Account | 
 }
 
 /** Entries of the given accounts, oldest first. */
-export async function listEntries(userId: number, accountId?: number): Promise<Entry[]> {
+/** `fiat` skips the BTC conversion: amounts as recorded, for the pages where the user types prices and balances. */
+export async function listEntries(userId: number, accountId?: number, fiat = false): Promise<Entry[]> {
   const { rows } = await pool.query(
     `SELECT ${ENTRY_COLS} FROM entries e JOIN accounts a ON a.id = e.account_id
      WHERE a.user_id = $1 ${accountId ? "AND a.id = $2" : ""} ORDER BY e.date, e.id`,
     accountId ? [userId, accountId] : [userId],
   );
-  return rows.map(toEntry);
+  const fx = fiat ? null : await btcFx(userId);
+  return rows.map(toEntry).map((e) => (fx ? { ...e, value: fx.at(e.value, e.date), contribution: fx.at(e.contribution, e.date) } : e));
 }
 
 export async function listCategories(userId: number): Promise<Category[]> {
@@ -76,16 +79,16 @@ const toTrade = (r: Record<string, unknown>): Trade => ({
  * Everything that values a holding reads this, so totals and transfers count everywhere. A transfer's cost comes
  * from the sending asset's history, so the user's trades are always worked out across all assets, then filtered.
  */
-export async function listTrades(userId: number, accountId?: number): Promise<Trade[]> {
-  const p = await listTradeParts(userId);
+export async function listTrades(userId: number, accountId?: number, fiat = false): Promise<Trade[]> {
+  const p = await listTradeParts(userId, fiat);
   const all = deriveTrades(p.trades, p.totals, p.transfers, p.prices);
   return accountId ? all.filter((t) => t.accountId === accountId) : all;
 }
 
 /** Everything trades are worked out from, for all of the user's assets. */
-export async function listTradeParts(userId: number) {
+export async function listTradeParts(userId: number, fiat = false) {
   const [trades, totals, transfers, prices] = await Promise.all([
-    listEnteredTrades(userId), listTotals(userId), listTransfers(userId), listPrices(userId),
+    listEnteredTrades(userId, undefined, fiat), listTotals(userId, undefined, fiat), listTransfers(userId), listPrices(userId, undefined, fiat),
   ]);
   return { trades, totals, transfers, prices };
 }
@@ -103,38 +106,42 @@ export async function listTransfers(userId: number): Promise<Transfer[]> {
   }));
 }
 
-export async function listTotals(userId: number, accountId?: number): Promise<Total[]> {
+export async function listTotals(userId: number, accountId?: number, fiat = false): Promise<Total[]> {
   const { rows } = await pool.query(
     `SELECT s.id, s.account_id, s.date::text AS date, s.units, s.cost, s.price, s.note
      FROM totals s JOIN accounts a ON a.id = s.account_id
      WHERE a.user_id = $1 ${accountId ? "AND a.id = $2" : ""} ORDER BY s.date`,
     accountId ? [userId, accountId] : [userId],
   );
+  const fx = fiat ? null : await btcFx(userId);
+  const at = (n: number, d: string) => (fx ? fx.at(n, d) : n);
   return rows.map((r) => ({
     id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, units: Number(r.units),
-    cost: Number(r.cost), price: Number(r.price), note: (r.note as string | null) ?? null,
+    cost: at(Number(r.cost), r.date as string), price: at(Number(r.price), r.date as string), note: (r.note as string | null) ?? null,
   }));
 }
 
 /** Only the buys and sales entered as such, without the ones from totals. */
-export async function listEnteredTrades(userId: number, accountId?: number): Promise<Trade[]> {
+export async function listEnteredTrades(userId: number, accountId?: number, fiat = false): Promise<Trade[]> {
   const { rows } = await pool.query(
     `SELECT t.id, t.account_id, t.date::text AS date, t.side, t.quantity, t.price, t.fee, t.note
      FROM transactions t JOIN accounts a ON a.id = t.account_id
      WHERE a.user_id = $1 ${accountId ? "AND a.id = $2" : ""} ORDER BY t.date, t.id`,
     accountId ? [userId, accountId] : [userId],
   );
-  return rows.map(toTrade);
+  const fx = fiat ? null : await btcFx(userId);
+  return rows.map(toTrade).map((t) => (fx ? { ...t, price: fx.at(t.price, t.date), fee: fx.at(t.fee, t.date) } : t));
 }
 
-export async function listPrices(userId: number, accountId?: number): Promise<PricePoint[]> {
+export async function listPrices(userId: number, accountId?: number, fiat = false): Promise<PricePoint[]> {
   const { rows } = await pool.query(
     `SELECT p.id, p.account_id, p.date::text AS date, p.price
      FROM prices p JOIN accounts a ON a.id = p.account_id
      WHERE a.user_id = $1 ${accountId ? "AND a.id = $2" : ""} ORDER BY p.date`,
     accountId ? [userId, accountId] : [userId],
   );
-  return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: Number(r.price) }));
+  const fx = fiat ? null : await btcFx(userId);
+  return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: fx ? fx.at(Number(r.price), r.date as string) : Number(r.price) }));
 }
 
 const toPlan = (r: Record<string, unknown>): Plan => ({
@@ -144,12 +151,15 @@ const toPlan = (r: Record<string, unknown>): Plan => ({
 
 export async function listPlans(userId: number): Promise<Plan[]> {
   const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
-  return rows.map(toPlan);
+  const fx = await btcFx(userId);
+  return rows.map(toPlan).map((p) => (fx ? { ...p, monthlySaving: fx.now(p.monthlySaving) } : p));
 }
 
 export async function getPlan(userId: number, id: number): Promise<Plan | null> {
   const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
-  return rows[0] ? toPlan(rows[0]) : null;
+  const fx = await btcFx(userId);
+  const plan = rows[0] ? toPlan(rows[0]) : null;
+  return plan && fx ? { ...plan, monthlySaving: fx.now(plan.monthlySaving) } : plan;
 }
 
 /** The costs of one plan, or of all the user's plans. */
@@ -160,11 +170,12 @@ export async function listPlanItems(userId: number, planId?: number): Promise<Pl
      WHERE p.user_id = $1 ${planId ? "AND p.id = $2" : ""} ORDER BY i.start_date, i.id`,
     planId ? [userId, planId] : [userId],
   );
+  const fx = await btcFx(userId);
   return rows.map((r) => ({
     id: Number(r.id),
     planId: Number(r.plan_id),
     name: r.name as string,
-    amount: Number(r.amount),
+    amount: fx ? fx.now(Number(r.amount)) : Number(r.amount),
     frequency: r.frequency as Frequency,
     startDate: r.start_date as string,
     occurrences: Number(r.occurrences),
@@ -189,11 +200,13 @@ export async function listBills(userId: number): Promise<Bill[]> {
      FROM bills WHERE user_id = $1 ORDER BY lower(group_name), lower(name), id`,
     [userId],
   );
+  const fx = await btcFx(userId);
+  const now = (n: number) => (fx ? fx.now(n) : n);
   return rows.map((r) => ({
-    id: Number(r.id), name: r.name as string, amount: Number(r.amount), everyMonths: Number(r.every_months),
+    id: Number(r.id), name: r.name as string, amount: now(Number(r.amount)), everyMonths: Number(r.every_months),
     firstDue: r.first_due as string, endDate: (r.end_date as string | null) ?? null, group: r.group_name as string,
     accountId: r.account_id === null ? null : Number(r.account_id), note: (r.note as string | null) ?? null,
-    planAmount: r.plan_amount === null ? null : Number(r.plan_amount), planDrop: r.plan_drop as boolean,
+    planAmount: r.plan_amount === null ? null : now(Number(r.plan_amount)), planDrop: r.plan_drop as boolean,
   }));
 }
 
@@ -221,7 +234,10 @@ export async function listGoalVersions(userId: number, goalId?: number): Promise
      WHERE g.user_id = $1 ${goalId ? "AND g.id = $2" : ""} ORDER BY v.created_at, v.id`,
     goalId ? [userId, goalId] : [userId],
   );
-  const n = (v: unknown) => (v === null ? null : Number(v));
+  const fx = await btcFx(userId);
+  // Where it started is what it was worth then; what it aims for and sets aside is counted at today's price.
+  const now = (v: unknown) => (v === null ? null : fx ? fx.now(Number(v)) : Number(v));
+  const then = (v: unknown, date: unknown) => (fx ? fx.at(Number(v), String(date)) : Number(v));
   const { rows: parts } = await pool.query(
     `SELECT a.version_id, a.account_id, a.start_value, a.expected_return, a.monthly_contribution
      FROM goal_version_assets a JOIN goal_versions v ON v.id = a.version_id JOIN goals g ON g.id = v.goal_id
@@ -229,13 +245,13 @@ export async function listGoalVersions(userId: number, goalId?: number): Promise
     goalId ? [userId, goalId] : [userId],
   );
   return rows.map((r) => ({
-    id: Number(r.id), goalId: Number(r.goal_id), startDate: r.start_date as string, startValue: Number(r.start_value),
-    targetDate: r.target_date as string, targetMode: r.target_mode as GoalVersion["targetMode"], targetAmount: n(r.target_amount),
-    monthlySpending: n(r.monthly_spending), withdrawalRate: Number(r.withdrawal_rate), expectedReturn: Number(r.expected_return),
-    inflation: Number(r.inflation), monthlyContribution: Number(r.monthly_contribution), contributionGrowth: Number(r.contribution_growth),
+    id: Number(r.id), goalId: Number(r.goal_id), startDate: r.start_date as string, startValue: then(r.start_value, r.start_date),
+    targetDate: r.target_date as string, targetMode: r.target_mode as GoalVersion["targetMode"], targetAmount: now(r.target_amount),
+    monthlySpending: now(r.monthly_spending), withdrawalRate: Number(r.withdrawal_rate), expectedReturn: Number(r.expected_return),
+    inflation: Number(r.inflation), monthlyContribution: now(r.monthly_contribution) ?? 0, contributionGrowth: Number(r.contribution_growth),
     note: (r.note as string | null) ?? null, createdAt: r.created_at as string,
     assets: parts.filter((a) => Number(a.version_id) === Number(r.id)).map((a) => ({
-      accountId: Number(a.account_id), startValue: Number(a.start_value), rate: Number(a.expected_return), monthly: Number(a.monthly_contribution),
+      accountId: Number(a.account_id), startValue: then(a.start_value, r.start_date), rate: Number(a.expected_return), monthly: now(a.monthly_contribution) ?? 0,
     })),
   }));
 }
@@ -267,8 +283,9 @@ export async function listHobbySpending(userId: number): Promise<Spending[]> {
      WHERE user_id = $1 AND kind = 'hobby' ORDER BY spent_on DESC, id DESC`,
     [userId],
   );
+  const fx = await btcFx(userId);
   return rows.map((r) => ({
-    id: Number(r.id), date: r.spent_on as string, amount: Number(r.amount), category: r.category as string, name: (r.name as string | null) ?? null,
+    id: Number(r.id), date: r.spent_on as string, amount: fx ? fx.at(Number(r.amount), r.spent_on as string) : Number(r.amount), category: r.category as string, name: (r.name as string | null) ?? null,
     note: (r.note as string | null) ?? null,
   }));
 }
@@ -297,5 +314,6 @@ export async function listMonthlySpending(userId: number): Promise<MonthlySpendi
      FROM monthly_spending m JOIN spending_categories c ON c.id = m.category_id WHERE c.user_id = $1 ORDER BY m.month`,
     [userId],
   );
-  return rows.map((r) => ({ categoryId: Number(r.category_id), month: r.month as string, amount: Number(r.amount) }));
+  const fx = await btcFx(userId);
+  return rows.map((r) => ({ categoryId: Number(r.category_id), month: r.month as string, amount: fx ? fx.at(Number(r.amount), `${r.month}-01`) : Number(r.amount) }));
 }

@@ -1,10 +1,16 @@
-/** Always two decimals, whatever the currency (the exceptions are the shortened chart axes, which ask for `notation: "compact"`). */
+/** BTC Standard shows amounts in BTC, which is worth too much for two decimals to say anything. */
+const BTC_DECIMALS = 6;
+
+/** Always two decimals, whatever the currency (the exceptions are BTC, and the shortened chart axes, which ask for `notation: "compact"`). */
 export const money = (n: number, currency: string, opts: Intl.NumberFormatOptions = {}) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2, ...opts }).format(n);
+  new Intl.NumberFormat("en-US", {
+    style: "currency", currency,
+    minimumFractionDigits: currency === "BTC" ? BTC_DECIMALS : 2, maximumFractionDigits: currency === "BTC" ? BTC_DECIMALS : 2, ...opts,
+  }).format(n);
 
 /** A shortened amount for a chart axis, such as THB 9.5K. */
 export const compactMoney = (n: number, currency: string) =>
-  money(n, currency, { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  money(n, currency, { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: currency === "BTC" ? 3 : 2 });
 
 export const signedMoney = (n: number, currency: string) =>
   (n > 0 ? "+" : n < 0 ? "−" : "") + money(Math.abs(n), currency);

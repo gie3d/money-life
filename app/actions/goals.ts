@@ -7,7 +7,7 @@ import { listAccounts, listEntries, listPrices, listTrades } from "@/lib/data";
 import { combined, valueOn, type PlanAsset } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
 import { accountEntries } from "@/lib/portfolio";
-import { requireUser } from "@/lib/session";
+import { requireEditable } from "@/lib/session";
 import type { FormState } from "./auth";
 
 const num = (v: FormDataEntryValue | null) => {
@@ -113,7 +113,7 @@ async function planAssets(userId: number, form: FormData, ids: number[], startDa
 }
 
 export async function createGoal(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   const kind = form.get("kind") === "retirement" ? "retirement" : "other";
   if (!name) return { error: "Give the goal a name." };
@@ -140,7 +140,7 @@ export async function createGoal(_: FormState, form: FormData): Promise<FormStat
  * versions stay, to compare against. The goal's name and assets can change at the same time.
  */
 export async function reviseGoal(goalId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const { rows } = await pool.query("SELECT kind FROM goals WHERE id = $1 AND user_id = $2", [goalId, user.id]);
   if (!rows[0]) return { error: "That goal no longer exists." };
   const name = String(form.get("name") ?? "").trim();
@@ -173,7 +173,7 @@ export async function reviseGoal(goalId: number, _: FormState, form: FormData): 
 
 /** Removes one earlier version of a plan; the current (latest) one can't be removed while it is the only one. */
 export async function deleteGoalVersion(goalId: number, versionId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query(
     `DELETE FROM goal_versions v USING goals g
      WHERE v.id = $1 AND g.id = v.goal_id AND g.id = $2 AND g.user_id = $3
@@ -184,7 +184,7 @@ export async function deleteGoalVersion(goalId: number, versionId: number) {
 }
 
 export async function updateGoalNotes(goalId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
   if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
   const { rowCount } = await pool.query("UPDATE goals SET notes = $3 WHERE id = $1 AND user_id = $2", [goalId, user.id, notes || null]);
@@ -193,7 +193,7 @@ export async function updateGoalNotes(goalId: number, _: FormState, form: FormDa
 }
 
 export async function deleteGoal(goalId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM goals WHERE id = $1 AND user_id = $2", [goalId, user.id]);
   revalidatePath("/goals");
   redirect("/goals");

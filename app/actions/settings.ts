@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { btcRates } from "@/lib/btc";
 import { pool } from "@/lib/db";
 import { hashPassword, requireUser, revokeOtherSessions, verifyPassword } from "@/lib/session";
 import { CATEGORY_COLORS, STARTER_CATEGORIES } from "@/lib/types";
@@ -64,4 +65,12 @@ export async function deleteAllData(_: SettingsState, form: FormData): Promise<S
   }
   revalidatePath("/", "layout");
   redirect("/");
+}
+
+/** Turns BTC Standard on or off. It can only be on while a category named BTC (an investment) has a price to convert with. */
+export async function setBtcStandard(form: FormData) {
+  const user = await requireUser();
+  const on = form.get("on") === "true" && (await btcRates(user.id)) !== null;
+  await pool.query("UPDATE users SET btc_standard = $2 WHERE id = $1", [user.id, on]);
+  revalidatePath("/", "layout");
 }

@@ -1,4 +1,12 @@
-export type User = { id: number; email: string; name: string; currency: string };
+export type User = {
+  id: number; email: string; name: string;
+  /** What amounts are shown in: the chosen currency, or "BTC" while BTC Standard is on. */
+  currency: string;
+  /** The chosen currency, which amounts are typed in even while BTC Standard shows them in BTC. */
+  baseCurrency: string;
+  /** True while amounts are converted to BTC for display. */
+  btcStandard: boolean;
+};
 
 export type Account = {
   id: number;

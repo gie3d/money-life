@@ -13,8 +13,9 @@ export const metadata: Metadata = { title: "Update values" };
 export default async function UpdateValuesPage() {
   const user = await requireUser();
   const [accounts, entries, categories, trades, prices] = await Promise.all([
-    listAccounts(user.id), listEntries(user.id), listCategories(user.id), listTrades(user.id), listPrices(user.id),
+    listAccounts(user.id), listEntries(user.id, undefined, true), listCategories(user.id), listTrades(user.id, undefined, true), listPrices(user.id, undefined, true),
   ]);
+  // Typed and shown in the chosen currency, even while BTC Standard is on.
   const held = holdings(accounts, entries, trades, prices);
 
   // One row per asset that can be given a new value: any cash or saving balance, and any investment with units.
@@ -50,7 +51,7 @@ export default async function UpdateValuesPage() {
           <Link href="/welcome" className="btn mt-4">Set up my assets</Link>
         </div>
       ) : (
-        <UpdateValues rows={rows} currency={user.currency} />
+        <UpdateValues rows={rows} currency={user.baseCurrency} />
       )}
     </div>
   );

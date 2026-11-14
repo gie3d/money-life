@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { btcFx } from "./btc";
 import { pool } from "./db";
 import type { User } from "./types";
 
@@ -63,11 +64,23 @@ export const getUser = cache(async (): Promise<User | null> => {
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [sha(token)],
   );
-  return rows[0] ? { id: Number(rows[0].id), email: rows[0].email, name: rows[0].name, currency: rows[0].currency } : null;
+  if (!rows[0]) return null;
+  const btc = (await btcFx(Number(rows[0].id))) !== null;
+  return { id: Number(rows[0].id), email: rows[0].email, name: rows[0].name, currency: btc ? "BTC" : rows[0].currency, baseCurrency: rows[0].currency, btcStandard: btc };
 });
 
 export async function requireUser(): Promise<User> {
   const user = await getUser();
   if (!user) redirect("/login");
+  return user;
+}
+
+/**
+ * For anything that records or changes an amount. While BTC Standard is on every amount on screen is a conversion,
+ * so saving one would store a BTC figure as if it were in the real currency; turn it off first.
+ */
+export async function requireEditable(): Promise<User> {
+  const user = await requireUser();
+  if (user.btcStandard) throw new Error("BTC Standard is on: amounts are shown in BTC and can't be recorded or changed. Turn it off in Settings first.");
   return user;
 }

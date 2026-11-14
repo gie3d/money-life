@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { pool } from "@/lib/db";
-import { requireUser } from "@/lib/session";
+import { requireEditable } from "@/lib/session";
 import { isMonth, isTier, STARTER_CATEGORIES, STARTER_TIERS } from "@/lib/spending";
 import type { FormState } from "./auth";
 
@@ -19,7 +19,7 @@ const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Dat
  * Only the user's own categories are touched.
  */
 export async function saveMonth(month: string, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   if (!isMonth(month)) return { error: "Pick a month." };
   const { rows } = await pool.query("SELECT id, name FROM spending_categories WHERE user_id = $1", [user.id]);
   const changes: { id: number; amount: number | null; note?: string | null }[] = [];
@@ -61,7 +61,7 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
 
 /** Adds a category at the end of the list. A removed one with the same name comes back, with its past months. */
 export async function addSpendingCategory(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   if (!name || name.length > 60) return { error: "Give the category a name of 1 to 60 characters." };
   const { rows } = await pool.query("SELECT id, archived FROM spending_categories WHERE user_id = $1 AND lower(name) = lower($2)", [user.id, name]);
@@ -78,7 +78,7 @@ export async function addSpendingCategory(_: FormState, form: FormData): Promise
 
 /** Renames a category; its past months go with it. */
 export async function renameSpendingCategory(id: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   if (!name || name.length > 60) return { error: "Give the category a name of 1 to 60 characters." };
   const { rowCount: taken } = await pool.query("SELECT 1 FROM spending_categories WHERE user_id = $1 AND lower(name) = lower($2) AND id <> $3", [user.id, name, id]);
@@ -89,7 +89,7 @@ export async function renameSpendingCategory(id: number, _: FormState, form: For
 
 /** Sets whether a category is a must, a need or a want; "none" clears it. */
 export async function setSpendingTier(id: number, tier: string) {
-  const user = await requireUser();
+  const user = await requireEditable();
   if (tier !== "none" && !isTier(tier)) return;
   await pool.query("UPDATE spending_categories SET tier = $3 WHERE id = $1 AND user_id = $2", [id, user.id, tier === "none" ? null : tier]);
   revalidatePath("/spending");
@@ -97,7 +97,7 @@ export async function setSpendingTier(id: number, tier: string) {
 
 /** Takes a category off the list. With amounts recorded it is archived, so past months keep them; without, it goes. */
 export async function removeSpendingCategory(id: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   const { rowCount: used } = await pool.query(
     "SELECT 1 FROM monthly_spending m JOIN spending_categories c ON c.id = m.category_id WHERE c.id = $1 AND c.user_id = $2 LIMIT 1", [id, user.id]);
   if (used) await pool.query("UPDATE spending_categories SET archived = true WHERE id = $1 AND user_id = $2", [id, user.id]);
@@ -107,14 +107,14 @@ export async function removeSpendingCategory(id: number) {
 
 /** Puts an archived category back on the list. */
 export async function restoreSpendingCategory(id: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("UPDATE spending_categories SET archived = false WHERE id = $1 AND user_id = $2", [id, user.id]);
   revalidatePath("/spending");
 }
 
 /** Moves a category one place up or down the list. */
 export async function moveSpendingCategory(id: number, by: -1 | 1) {
-  const user = await requireUser();
+  const user = await requireEditable();
   const { rows } = await pool.query("SELECT id FROM spending_categories WHERE user_id = $1 AND NOT archived ORDER BY position, id", [user.id]);
   const ids = rows.map((r) => Number(r.id));
   const i = ids.indexOf(id);
@@ -129,7 +129,7 @@ export async function moveSpendingCategory(id: number, by: -1 | 1) {
 
 /** Starts an empty list with a handful of common categories. */
 export async function startSpendingCategories() {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query(
     `INSERT INTO spending_categories (user_id, name, position, tier)
      SELECT $1, name, pos, tier FROM unnest($2::text[], $3::text[]) WITH ORDINALITY AS v(name, tier, pos)
@@ -156,7 +156,7 @@ function readHobby(form: FormData) {
 }
 
 export async function createHobbySpending(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const s = readHobby(form);
   if ("error" in s) return s;
   await pool.query(
@@ -166,7 +166,7 @@ export async function createHobbySpending(_: FormState, form: FormData): Promise
 }
 
 export async function updateHobbySpending(id: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const s = readHobby(form);
   if ("error" in s) return s;
   const { rowCount } = await pool.query(
@@ -177,7 +177,7 @@ export async function updateHobbySpending(id: number, _: FormState, form: FormDa
 }
 
 export async function deleteHobbySpending(id: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM spendings WHERE id = $1 AND user_id = $2 AND kind = 'hobby'", [id, user.id]);
   revalidatePath("/spending/hobbies");
 }

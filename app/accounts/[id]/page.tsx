@@ -159,7 +159,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
       {investment ? (
         <div className="grid gap-5 md:grid-cols-2">
           <TradeForm accountId={account.id} currency={cur} trades={trades} transferTargets={transferTargets} />
-          <PriceForm accountId={account.id} currency={cur} />
+          <PriceForm accountId={account.id} currency={user.baseCurrency} />
         </div>
       ) : (
         <EntryForm accountId={account.id} currency={cur} entries={entries.map((e) => ({ date: e.date, value: e.value }))} />

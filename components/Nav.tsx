@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
+import { setBtcStandard } from "@/app/actions/settings";
 import { isRecordPath, SECTIONS, sectionOf, type SectionId } from "@/lib/sections";
 
 const THEME_EVENT = "ml-theme-change";
@@ -37,6 +38,22 @@ function ThemeToggle() {
         {theme === "dark" ? <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /> : <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>}
       </svg>
     </button>
+  );
+}
+
+/** BTC Standard on or off, for whoever can use it. A form, so it works as a plain submit and the page refreshes with it. */
+function BtcSwitch({ on }: { on: boolean }) {
+  return (
+    <form action={setBtcStandard}>
+      <input type="hidden" name="on" value={String(!on)} />
+      <button role="switch" aria-checked={on} title={on ? "BTC Standard is on: show amounts in your own currency" : "Show every amount in BTC"}
+        className="flex h-9 items-center gap-2 rounded-full bg-surface-2 pl-3 pr-2 text-xs font-bold text-ink-2">
+        BTC
+        <span aria-hidden className={`relative h-5 w-9 rounded-full transition-colors ${on ? "bg-brand" : "bg-line"}`}>
+          <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${on ? "left-[1.1rem]" : "left-0.5"}`} />
+        </span>
+      </button>
+    </form>
   );
 }
 
@@ -75,7 +92,7 @@ const PLUS = (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
 );
 
-export default function Nav({ userName }: { userName: string | null }) {
+export default function Nav({ userName, btc }: { userName: string | null; btc: { on: boolean } | null }) {
   const pathname = usePathname();
   const section = sectionOf(pathname);
   const onSettings = pathname.startsWith("/settings");
@@ -111,6 +128,7 @@ export default function Nav({ userName }: { userName: string | null }) {
                 {PLUS} Record
               </Link>
             )}
+            {btc && <BtcSwitch on={btc.on} />}
             <RefreshButton />
             <ThemeToggle />
             {userName && (

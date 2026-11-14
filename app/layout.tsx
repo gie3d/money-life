@@ -6,6 +6,7 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 import UpdateBanner from "@/components/UpdateBanner";
 import { appVersion } from "@/lib/version";
+import { btcRates } from "@/lib/btc";
 import { getUser } from "@/lib/session";
 import pkg from "../package.json";
 
@@ -47,7 +48,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Script id="theme" strategy="beforeInteractive">{themeScript}</Script>
       </head>
       <body className={`min-h-full flex flex-col ${user ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0" : ""}`}>
-        <Nav userName={user?.name ?? null} />
+        <Nav userName={user?.name ?? null} btc={user && (await btcRates(user.id)) ? { on: user.btcStandard } : null} />
+        {user?.btcStandard && (
+          <p role="status" className="bg-brand-soft px-4 py-2 text-center text-xs font-semibold text-brand">
+            BTC Standard is on: amounts are shown in BTC. Prices and balances are still updated in your own currency; other changes need it off. <Link href="/settings" className="underline">Settings</Link>
+          </p>
+        )}
         <main className="flex-1 w-full">{children}</main>
         <footer className="flex items-center justify-center gap-3 px-4 py-6 text-xs text-ink-3">
           <span className="num">Money Life v{pkg.version}</span>

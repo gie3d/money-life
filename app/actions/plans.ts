@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
 import { getPlan } from "@/lib/data";
-import { requireUser } from "@/lib/session";
+import { requireEditable } from "@/lib/session";
 import { FREQUENCIES, type Frequency } from "@/lib/types";
 import type { FormState } from "./auth";
 
@@ -15,7 +15,7 @@ const num = (v: FormDataEntryValue | null) => {
 const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d));
 
 export async function createPlan(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   if (!name) return { error: "Give the plan a name." };
   if (name.length > 80) return { error: "Keep the name under 80 characters." };
@@ -33,7 +33,7 @@ export async function createPlan(_: FormState, form: FormData): Promise<FormStat
 }
 
 export async function updatePlan(planId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
   const saving = form.get("saving") === "" ? 0 : num(form.get("saving"));
   if (!name || name.length > 80) return { error: "Use a name of 1 to 80 characters." };
@@ -45,7 +45,7 @@ export async function updatePlan(planId: number, _: FormState, form: FormData): 
 
 /** Saves the free-text notes of a plan; empty clears them. */
 export async function updatePlanNotes(planId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
   if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
   const { rowCount } = await pool.query("UPDATE plans SET notes = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, notes || null]);
@@ -55,13 +55,13 @@ export async function updatePlanNotes(planId: number, _: FormState, form: FormDa
 
 /** Puts a plan aside (or brings it back). Archived plans keep everything but leave the Plans page and the forecast. */
 export async function setPlanArchived(planId: number, archived: boolean) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("UPDATE plans SET archived = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, archived]);
   revalidatePath("/", "layout");
 }
 
 export async function deletePlan(planId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM plans WHERE id = $1 AND user_id = $2", [planId, user.id]);
   revalidatePath("/", "layout");
   redirect("/plans");
@@ -86,7 +86,7 @@ function readItem(form: FormData): ItemInput | { error: string } {
 }
 
 export async function addPlanItem(planId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   if (!(await getPlan(user.id, planId))) return { error: "That plan no longer exists." };
   const it = readItem(form);
   if ("error" in it) return it;
@@ -99,7 +99,7 @@ export async function addPlanItem(planId: number, _: FormState, form: FormData):
 }
 
 export async function updatePlanItem(itemId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const it = readItem(form);
   if ("error" in it) return it;
 
@@ -113,14 +113,14 @@ export async function updatePlanItem(itemId: number, _: FormState, form: FormDat
 }
 
 export async function deletePlanItem(itemId: number) {
-  const user = await requireUser();
+  const user = await requireEditable();
   await pool.query("DELETE FROM plan_items i USING plans p WHERE i.id = $1 AND p.id = i.plan_id AND p.user_id = $2", [itemId, user.id]);
   revalidatePath("/", "layout");
 }
 
 /** Replaces the set of assets paying for a plan with the ticked ones (only the user's own). */
 export async function setPlanAssets(planId: number, _: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   if (!(await getPlan(user.id, planId))) return { error: "That plan no longer exists." };
   const ids = form.getAll("asset").map(Number).filter(Number.isInteger);
 

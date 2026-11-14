@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
-import { requireUser } from "@/lib/session";
+import { requireEditable } from "@/lib/session";
 import { CURRENCIES, isInvestment, LIQUIDITY } from "@/lib/types";
 import type { FormState } from "./auth";
 
@@ -31,7 +31,7 @@ const num = (v: string | undefined) => {
  * the same as typing what a broker shows, so it can be corrected later like any other.
  */
 export async function completeSetup(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireEditable();
   const currency = String(form.get("currency") ?? user.currency);
   const next = String(form.get("next") ?? "home");
   let assets: SetupAsset[];
