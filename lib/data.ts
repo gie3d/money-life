@@ -1,7 +1,7 @@
 import "server-only";
 import { btcFx } from "./btc";
 import { pool } from "./db";
-import { deriveTrades } from "./investment";
+import { convertTrades, deriveTrades } from "./investment";
 import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlyNote, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
@@ -80,8 +80,12 @@ const toTrade = (r: Record<string, unknown>): Trade => ({
  * from the sending asset's history, so the user's trades are always worked out across all assets, then filtered.
  */
 export async function listTrades(userId: number, accountId?: number, fiat = false): Promise<Trade[]> {
-  const p = await listTradeParts(userId, fiat);
-  const all = deriveTrades(p.trades, p.totals, p.transfers, p.prices);
+  // Worked out in the user's own currency, then shown in BTC: converting the entered figures first would make a
+  // "Total"'s running cost move with the exchange rate (see convertTrades).
+  const p = await listTradeParts(userId, true);
+  const fx = fiat ? null : await btcFx(userId);
+  const derived = deriveTrades(p.trades, p.totals, p.transfers, p.prices);
+  const all = fx ? convertTrades(derived, fx.at, fx.pegged) : derived;
   return accountId ? all.filter((t) => t.accountId === accountId) : all;
 }
 
@@ -117,7 +121,7 @@ export async function listTotals(userId: number, accountId?: number, fiat = fals
   const at = (n: number, d: string) => (fx ? fx.at(n, d) : n);
   return rows.map((r) => ({
     id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, units: Number(r.units),
-    cost: at(Number(r.cost), r.date as string), price: at(Number(r.price), r.date as string), note: (r.note as string | null) ?? null,
+    cost: at(Number(r.cost), r.date as string), price: fx?.pegged.has(Number(r.account_id)) ? 1 : at(Number(r.price), r.date as string), note: (r.note as string | null) ?? null,
   }));
 }
 
@@ -130,7 +134,7 @@ export async function listEnteredTrades(userId: number, accountId?: number, fiat
     accountId ? [userId, accountId] : [userId],
   );
   const fx = fiat ? null : await btcFx(userId);
-  return rows.map(toTrade).map((t) => (fx ? { ...t, price: fx.at(t.price, t.date), fee: fx.at(t.fee, t.date) } : t));
+  return rows.map(toTrade).map((t) => (fx ? { ...t, price: fx.pegged.has(t.accountId) ? 1 : fx.at(t.price, t.date), fee: fx.at(t.fee, t.date) } : t));
 }
 
 export async function listPrices(userId: number, accountId?: number, fiat = false): Promise<PricePoint[]> {
@@ -141,7 +145,7 @@ export async function listPrices(userId: number, accountId?: number, fiat = fals
     accountId ? [userId, accountId] : [userId],
   );
   const fx = fiat ? null : await btcFx(userId);
-  return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: fx ? fx.at(Number(r.price), r.date as string) : Number(r.price) }));
+  return rows.map((r) => ({ id: Number(r.id), accountId: Number(r.account_id), date: r.date as string, price: fx ? (fx.pegged.has(Number(r.account_id)) ? 1 : fx.at(Number(r.price), r.date as string)) : Number(r.price) }));
 }
 
 const toPlan = (r: Record<string, unknown>): Plan => ({

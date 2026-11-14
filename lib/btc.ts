@@ -21,7 +21,15 @@ export const btcRates = cache(async (userId: number): Promise<{ date: string; pr
   return rows.length ? rows.map((r) => ({ date: r.date as string, price: Number(r.price) })) : null;
 });
 
+/** The assets under the BTC category: their unit is BTC itself, so in BTC Standard one unit is worth exactly 1. */
+const btcAssets = cache(async (userId: number): Promise<Set<number>> => {
+  const { rows } = await pool.query(`SELECT a.id FROM accounts a ${IN_BTC}`, [userId]);
+  return new Set(rows.map((r) => Number(r.id)));
+});
+
 export type Fx = {
+  /** Assets that are BTC themselves: priced at 1 BTC a unit, so what they are worth is the BTC held. */
+  pegged: Set<number>;
   /** An amount on a date, in BTC: at that date's price (the latest recorded on or before it; the first one, before any). */
   at: (amount: number, date: string) => number;
   /** An amount at today's price: the latest recorded on any asset under BTC. */
@@ -43,5 +51,5 @@ export const btcFx = cache(async (userId: number): Promise<Fx | null> => {
     }
     return rates[found].price;
   };
-  return { at: (amount, date) => amount / rateOn(date), now: (amount) => amount / latest };
+  return { pegged: await btcAssets(userId), at: (amount, date) => amount / rateOn(date), now: (amount) => amount / latest };
 });

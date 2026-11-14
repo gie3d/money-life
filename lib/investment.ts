@@ -180,3 +180,52 @@ export function investmentEntries(accountId: number, trades: Trade[], prices: Pr
   }
   return out;
 }
+
+/**
+ * Trades worked out in the user's own currency, shown in another unit (BTC): every amount is converted at the price on
+ * its own day, and the cost of what is held is built up the same way, so a holding keeps the cost it had in BTC.
+ *
+ * It can't be done by converting the figures that were entered, because a "Total" states the cost of everything held
+ * so far, bought over years: that cost converted at the Total's date moves with the exchange rate alone, which would
+ * read as money paid in or out whenever the price moved. Here only what changed in the cost (the money that went in)
+ * is converted, at that day's price; a transfer takes the sender's average cost in the new unit.
+ *
+ * `at` converts an amount on a date (the amount divided by the price that day). An asset in `pegged` is the new unit
+ * itself (BTC held in a wallet): a unit is always worth 1 and costs 1, so its value is simply how many units it holds.
+ */
+export function convertTrades(all: Trade[], at: (amount: number, date: string) => number, pegged: ReadonlySet<number> = new Set()): Trade[] {
+  const sorted = [...all].sort(order);
+  const fiatDone = new Map<number, Trade[]>();
+  const unitDone = new Map<number, Trade[]>();
+  const transferCost = new Map<number, { cost: number; feeCost: number }>();
+  const out: Trade[] = [];
+  const list = (m: Map<number, Trade[]>, id: number) => m.get(id) ?? m.set(id, []).get(id)!;
+
+  for (const t of sorted) {
+    const peg = pegged.has(t.accountId);
+    const price = peg ? 1 : at(t.price, t.date);
+    let next: Trade;
+    if (t.transfer) {
+      const x = t.transfer;
+      if (!transferCost.has(x.id)) {
+        const sender = t.transfer.direction === "out" ? t.accountId : x.otherAccountId;
+        const avg = replay(list(unitDone, sender)).avgCost;
+        transferCost.set(x.id, { cost: avg * x.units, feeCost: avg * x.fee });
+      }
+      next = { ...t, price, fee: 0, transfer: { ...x, ...transferCost.get(x.id)! } };
+    } else if (t.total) {
+      const before = replay(list(fiatDone, t.accountId));
+      const beforeUnit = replay(list(unitDone, t.accountId));
+      const rise = t.total.cost - before.cost;
+      const cost = peg ? t.total.units : rise >= 0 ? beforeUnit.cost + at(rise, t.date) : before.cost > 0 ? beforeUnit.cost * (t.total.cost / before.cost) : 0;
+      const cash = t.side === "sell" || peg ? t.quantity * price : at(rise, t.date);
+      next = { ...t, price, total: { ...t.total, cost, cash } };
+    } else {
+      next = { ...t, price, fee: at(t.fee, t.date) };
+    }
+    list(fiatDone, t.accountId).push(t);
+    list(unitDone, t.accountId).push(next);
+    out.push(next);
+  }
+  return out;
+}

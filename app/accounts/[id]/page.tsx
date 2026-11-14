@@ -39,6 +39,8 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
   const cur = user.currency;
   const investment = isInvestment(account);
+  // A BTC wallet in BTC Standard: what matters is how much BTC it holds, not a value, cost or profit.
+  const wallet = user.btcStandard && investment && account.categoryName.trim().toLowerCase() === "btc";
   const [entries, trades, prices, categories, allAccounts] = await Promise.all([
     investment ? [] : listEntries(user.id, account.id),
     investment ? listTrades(user.id, account.id) : [],
@@ -102,7 +104,13 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         </section>
       )}
 
-      {h && investment && (
+      {h && wallet && (
+        <section className="card p-5 sm:p-6">
+          <Figure label={`BTC held · ${day(h.lastDate)}`} value={`${units(h.quantity ?? 0)} BTC`} big />
+        </section>
+      )}
+
+      {h && investment && !wallet && (
         <section className="card p-5 sm:p-6">
           {/* The two figures that matter first; the rest are a tap away. */}
           <div className="grid gap-4 sm:grid-cols-3">
@@ -142,13 +150,13 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
 
       {series.length > 0 && (
         <section className="card p-4 sm:p-6">
-          <h2 className="mb-3 text-lg">{investment ? "Value and cost" : "Balance over time"}</h2>
-          <NetWorthChart data={series} currency={cur} title={account.name} showCost={investment} />
-          {investment && <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you hold cost, fees included.</p>}
+          <h2 className="mb-3 text-lg">{wallet ? "BTC held over time" : investment ? "Value and cost" : "Balance over time"}</h2>
+          <NetWorthChart data={series} currency={cur} title={account.name} showCost={investment && !wallet} />
+          {investment && !wallet && <p className="mt-2 text-xs text-ink-3">The dashed line is what the units you hold cost, fees included.</p>}
         </section>
       )}
 
-      {investment && series.length > 0 && (
+      {investment && !wallet && series.length > 0 && (
         <section className="card p-4 sm:p-6">
           <h2 className="mb-3 text-lg">Profit over time</h2>
           <ProfitChart data={series} currency={cur} title={`${account.name} profit`} />
@@ -228,24 +236,24 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
                         <Link href={`/accounts/${t.transfer.otherAccountId}`} className="underline decoration-line underline-offset-2">{nameOf(t.transfer.otherAccountId)}</Link>
                       </p>
                       <p className="num text-xs text-ink-3">
-                        {money(t.transfer.cost, cur)} of cost moved
+                        {!wallet && `${money(t.transfer.cost, cur)} of cost moved`}
                         {t.transfer.fee > 0 && t.transfer.direction === "out" && ` · fee ${units(t.transfer.fee)} units`}
                       </p>
                     </div>
                   ) : t.total ? (
                     <div className="mt-1">
-                      <p className="num font-semibold">{units(t.total.units)} units · cost {money(t.total.cost, cur)}</p>
+                      <p className="num font-semibold">{units(t.total.units)} units{!wallet && ` · cost ${money(t.total.cost, cur)}`}</p>
                       <p className="num text-xs text-ink-3">
                         <span className={t.quantity === 0 ? "" : t.side === "buy" ? "text-go-text" : "text-miss-text"}>
                           {t.quantity === 0 ? "No change in units" : `${t.side === "buy" ? "Bought" : "Sold"} ${units(t.quantity)}`}
                         </span>
-                        {" · price "}{unitPrice(t.price, cur)}
+                        {!wallet && <>{" · price "}{unitPrice(t.price, cur)}</>}
                       </p>
                     </div>
                   ) : (
                     <div className="mt-1">
-                      <p className="num font-semibold">{units(t.quantity)} × {unitPrice(t.price, cur)}</p>
-                      <p className="num text-xs text-ink-3">{money(tradeCash(t), cur)}{t.fee > 0 && ` incl. ${money(t.fee, cur)} fee`}</p>
+                      <p className="num font-semibold">{wallet ? `${units(t.quantity)} units` : <>{units(t.quantity)} × {unitPrice(t.price, cur)}</>}</p>
+                      {(!wallet || t.fee > 0) && <p className="num text-xs text-ink-3">{!wallet && money(tradeCash(t), cur)}{t.fee > 0 && `${wallet ? "" : " incl. "}${money(t.fee, cur)} fee`}</p>}
                     </div>
                   )}
                 </div>
@@ -258,7 +266,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         </section>
       )}
 
-      {investment && history.length > 0 && (
+      {investment && !wallet && history.length > 0 && (
         <section id="prices" className="card divide-y divide-line scroll-mt-4">
           <h2 className="p-4 text-lg sm:px-6">Price history</h2>
           {pricePage.rows.map((p) => (

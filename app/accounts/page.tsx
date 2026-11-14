@@ -27,8 +27,13 @@ export default async function AccountsPage() {
   // Each asset's (and category's) last 6 months for its small chart, coloured by how it performed.
   const today = new Date().toISOString().slice(0, 10);
   // Investments have a return; cash and savings only a balance that rose or fell.
-  const trendOf = (members: (typeof accounts)[number][]) =>
-    (members.every((a) => !isInvestment(a)) ? balanceTrend : sixMonthTrend)(members.map((a) => accountEntries(a, entries, trades, prices)), today);
+  // A BTC wallet in BTC Standard holds an amount of BTC: its chart and change are how much it holds.
+  const isWallet = (a: (typeof accounts)[number]) => user.btcStandard && isInvestment(a) && a.categoryName.trim().toLowerCase() === "btc";
+  const trendOf = (members: (typeof accounts)[number][]) => {
+    const lists = members.map((a) => accountEntries(a, entries, trades, prices));
+    if (members.length > 0 && members.every(isWallet)) return sixMonthTrend(lists, today, true);
+    return (members.every((a) => !isInvestment(a)) ? balanceTrend : sixMonthTrend)(lists, today);
+  };
 
   // One group per category with assets, in the categories' own order; archived assets are listed but not summed.
   const active = accounts.filter((a) => !a.archived);
@@ -72,7 +77,7 @@ export default async function AccountsPage() {
             <span>Total <span className="num font-semibold text-ink">{money(total, cur)}</span> across {active.length} {active.length === 1 ? "asset" : "assets"}</span>
             {invs.length > 0 && <span>· investments <span className={`num font-semibold ${tone(invPl)}`}>{signedMoney(invPl, cur)} ({pct(invCost > 0 ? invPl / invCost : null)})</span></span>}
             {archivedCount > 0 && <span>· {archivedCount} archived, not counted</span>}
-            <Info label="About the small charts">Each small chart starts on the date at its left, the last 6 months or the day an asset first held anything. The percentage and the amount beside it are the change since that date: green for a gain, red for a loss, with money added or taken out set aside. The investments total above is different: value against what they cost, fees included.</Info>
+            <Info label="About the small charts">Each small chart starts on the date at its left, the last 6 months or the day an asset first held anything. The line is the value itself, so money moved or sold shows as a step. The percentage and the amount beside it are the change since that date: green for a gain, red for a loss, with money added or taken out set aside. The investments total above is different: value against what they cost, fees included.</Info>
           </p>
           {groups.map(({ category, members, sum, headTrend }) => (
             <section key={category.id} className="card divide-y divide-line overflow-hidden">
