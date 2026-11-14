@@ -13,10 +13,14 @@ const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Dat
 export async function saveEntry(id: number | null, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const date = String(form.get("date") ?? "");
+  const endRaw = String(form.get("endDate") ?? "");
   const title = String(form.get("title") ?? "").trim();
   const mood = String(form.get("mood") ?? "");
   const body = String(form.get("body") ?? "").replace(/\r\n/g, "\n").trim();
   if (!isDate(date)) return { error: "Pick the date this is about." };
+  if (endRaw && !isDate(endRaw)) return { error: "Pick a valid end date, or leave it empty for today." };
+  if (endRaw && endRaw < date) return { error: "The period can't end before it starts." };
+  const end = endRaw || null;
   if (!title || title.length > 120) return { error: "Give it a title of 1 to 120 characters." };
   if (!body) return { error: "Write something first." };
   if (body.length > 20_000) return { error: "An entry can be up to 20,000 characters." };
@@ -26,13 +30,13 @@ export async function saveEntry(id: number | null, _: FormState, form: FormData)
   let entryId = id;
   if (id === null) {
     const { rows } = await pool.query(
-      "INSERT INTO journal_entries (user_id, entry_date, title, mood, body) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-      [user.id, date, title, m, body]);
+      "INSERT INTO journal_entries (user_id, entry_date, end_date, title, mood, body) VALUES ($1, $2, $6, $3, $4, $5) RETURNING id",
+      [user.id, date, title, m, body, end]);
     entryId = Number(rows[0].id);
   } else {
     const { rowCount } = await pool.query(
-      "UPDATE journal_entries SET entry_date = $3, title = $4, mood = $5, body = $6, updated_at = now() WHERE id = $1 AND user_id = $2",
-      [id, user.id, date, title, m, body]);
+      "UPDATE journal_entries SET entry_date = $3, title = $4, mood = $5, body = $6, end_date = $7, updated_at = now() WHERE id = $1 AND user_id = $2",
+      [id, user.id, date, title, m, body, end]);
     if (!rowCount) return { error: "That entry no longer exists." };
   }
   // The assets it is about, only ones that are the user's own. Every current asset ticked means everything, stored as

@@ -1,18 +1,19 @@
 import "server-only";
-import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "./data";
-import { sortByCategory } from "./group";
-import { netWorthSeries } from "./performance";
+import { listAccounts, listEntries, listPrices, listTrades } from "./data";
+import { extendTo, netWorthSeries } from "./performance";
 import { accountEntries } from "./portfolio";
 
-export type AssetThen = { id: number; name: string; categoryId: number; category: string; color: string; then: number | null; now: number | null };
+export type TrendAsset = { id: number; name: string; color: string; categoryId: number; category: string };
+/** One day on the chart: the total of the assets, and each asset's own value under `a<id>`. */
+export type TrendRow = { date: string; total: number } & Record<string, number | string>;
 
 /**
  * What a journal entry says about money: how much the assets it mentions (everything, when it mentions none or all
  * of them) were worth on its date, from what was recorded by then, and what they are worth today.
  */
 export async function journalMoney(userId: number, today: string) {
-  const [accounts, entries, trades, prices, categories] = await Promise.all([
-    listAccounts(userId, true), listEntries(userId), listTrades(userId), listPrices(userId), listCategories(userId),
+  const [accounts, entries, trades, prices] = await Promise.all([
+    listAccounts(userId, true), listEntries(userId), listTrades(userId), listPrices(userId),
   ]);
   const lists = new Map(accounts.map((a) => [a.id, accountEntries(a, entries, trades, prices)]));
   const known = new Set(accounts.map((a) => a.id));
@@ -29,15 +30,24 @@ export async function journalMoney(userId: number, today: string) {
   const chosen = (ids: number[]) => (isEverything(ids) ? accounts.map((a) => a.id) : ids.filter((id) => known.has(id)));
 
   return {
+    /** How the assets an entry is about moved from `from` to `to` (capped at today): a row on each date something was recorded. */
+    trend(from: string, to: string, ids: number[]): { assets: TrendAsset[]; rows: TrendRow[] } {
+      const end = to < today ? to : today;
+      const pick = new Set(chosen(ids));
+      const picked = accounts.filter((a) => pick.has(a.id));
+      if (from > end) return { assets: [], rows: [] };
+      const total = extendTo(netWorthSeries(picked.map((a) => lists.get(a.id)!), from, end), end);
+      const per = picked.map((a) => ({ a, pts: netWorthSeries([lists.get(a.id)!], from, end) }));
+      const rows = total.map((p) => {
+        const row: TrendRow = { date: p.date, total: p.value };
+        for (const { a, pts } of per) row[`a${a.id}`] = [...pts].reverse().find((x) => x.date <= p.date)?.value ?? 0;
+        return row;
+      });
+      const held = per.filter(({ pts }) => pts.some((x) => x.value !== 0)).map(({ a }) => ({ id: a.id, name: a.name, color: a.categoryColor, categoryId: a.categoryId, category: a.categoryName }));
+      return { assets: held, rows };
+    },
     isEverything,
     names: (ids: number[]) => (isEverything(ids) ? [] : chosen(ids).map((id) => accounts.find((a) => a.id === id)!.name)),
     worth: (date: string, ids: number[]): number | null => valueOn(chosen(ids), date),
-    /** Each asset's value on the date and today, in the categories' own order; assets with nothing on either day are left out. */
-    breakdown(date: string, ids: number[]): AssetThen[] {
-      const pick = new Set(chosen(ids));
-      return sortByCategory(accounts.filter((a) => pick.has(a.id)), (a) => a.categoryId, categories)
-        .map((a) => ({ id: a.id, name: a.name, categoryId: a.categoryId, category: a.categoryName, color: a.categoryColor, then: valueOn([a.id], date), now: valueOn([a.id], today) }))
-        .filter((a) => (a.then ?? 0) !== 0 || (a.now ?? 0) !== 0);
-    },
   };
 }

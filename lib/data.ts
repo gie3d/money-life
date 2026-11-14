@@ -241,11 +241,11 @@ export async function listGoalVersions(userId: number, goalId?: number): Promise
 }
 
 const toJournal = (r: Record<string, unknown>): JournalEntry => ({
-  id: Number(r.id), date: r.entry_date as string, title: r.title as string, mood: (r.mood as string | null) ?? null, body: r.body as string,
+  id: Number(r.id), date: r.entry_date as string, endDate: (r.end_date as string | null) ?? null, title: r.title as string, mood: (r.mood as string | null) ?? null, body: r.body as string,
   accountIds: ((r.account_ids as string[] | null) ?? []).map(Number),
 });
 
-const JOURNAL_SELECT = `SELECT e.id, e.entry_date::text AS entry_date, e.title, e.mood, e.body,
+const JOURNAL_SELECT = `SELECT e.id, e.entry_date::text AS entry_date, e.end_date::text AS end_date, e.title, e.mood, e.body,
   COALESCE(array_agg(ea.account_id ORDER BY ea.account_id) FILTER (WHERE ea.account_id IS NOT NULL), '{}') AS account_ids
   FROM journal_entries e LEFT JOIN journal_entry_assets ea ON ea.entry_id = e.id`;
 

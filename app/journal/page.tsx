@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { listJournal } from "@/lib/data";
-import { day, money } from "@/lib/format";
+import { day, money, pct, tone } from "@/lib/format";
 import { journalMoney } from "@/lib/journal";
 import { requireUser } from "@/lib/session";
 import { MOODS } from "@/lib/types";
@@ -41,14 +41,15 @@ export default async function JournalPage() {
         <ul className="space-y-3">
           {entries.map((e) => {
             const mood = MOODS.find((m) => m.id === e.mood);
-            const worth = mine.worth(e.date, e.accountIds);
-            const about = mine.names(e.accountIds);
+            const end = e.endDate && e.endDate < today ? e.endDate : today;
+            const from = mine.worth(e.date, e.accountIds);
+            const to = mine.worth(end, e.accountIds);
             return (
               <li key={e.id}>
                 <Link href={`/journal/${e.id}`} className="card block space-y-1.5 p-5 hover:bg-surface-2 sm:p-6">
                   <p className="num flex flex-wrap items-center gap-x-3 text-xs text-ink-3">
-                    <span>{day(e.date)}</span>
-                    {worth !== null && <span>{about.length === 0 ? "Everything was" : about.length === 1 ? `${about[0]} was` : `${about.length} assets were`} worth {money(worth, user.currency)} then</span>}
+                    <span>{day(e.date)}{end > e.date && <> – {day(end)}</>}</span>
+                    {from !== null && to !== null && end > e.date && <span>{money(from, user.currency)} → {money(to, user.currency)}{from > 0 && <span className={tone(to - from)}> ({pct((to - from) / from)})</span>}</span>}
                   </p>
                   <p className="text-lg font-bold">{mood && <span aria-label={mood.label} title={mood.label}>{mood.emoji} </span>}{e.title}</p>
                   <p className="text-sm text-ink-2">{excerpt(e.body)}</p>

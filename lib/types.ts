@@ -220,7 +220,10 @@ export const MOODS = [
 
 export type JournalEntry = {
   id: number;
+  /** The start of the period it is about. */
   date: string;
+  /** The end of the period; null means up to today. */
+  endDate: string | null;
   title: string;
   mood: string | null;
   /** Markdown. */
