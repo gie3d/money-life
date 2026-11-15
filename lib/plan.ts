@@ -13,8 +13,17 @@ export function addMonths(date: string, n: number): string {
   return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
 }
 
-/** Every payment the items add up to, oldest first. */
+/** Every cost payment the items add up to, oldest first. Income items are not costs and are left out. */
 export function payments(items: PlanItem[]): Payment[] {
+  return expand(items.filter((i) => i.kind !== "income"));
+}
+
+/** Every income the items add up to, oldest first. */
+export function incomePayments(items: PlanItem[]): Payment[] {
+  return expand(items.filter((i) => i.kind === "income"));
+}
+
+function expand(items: PlanItem[]): Payment[] {
   const out: Payment[] = [];
   for (const it of items) {
     const count = it.frequency === "once" ? 1 : it.occurrences;

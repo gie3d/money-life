@@ -10,7 +10,7 @@ import type { PlanItem } from "@/lib/types";
 
 export default function EditPlanItem({ item, currency }: { item: PlanItem; currency: string }) {
   return (
-    <EditDialog label={`Edit ${item.name}`} title="Edit cost">
+    <EditDialog label={`Edit ${item.name}`} title={item.kind === "income" ? "Edit income" : "Edit cost"}>
       {(close) => <Form item={item} currency={currency} onDone={close} />}
     </EditDialog>
   );
@@ -25,7 +25,7 @@ function Form({ item, currency, onDone }: { item: PlanItem; currency: string; on
 
   return (
     <form action={action} className="space-y-4">
-      <h2 className="text-lg">Edit cost</h2>
+      <h2 className="text-lg">{item.kind === "income" ? "Edit income" : "Edit cost"}</h2>
       <PlanItemFields currency={currency} item={item} />
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <div className="flex justify-end gap-2">

@@ -32,4 +32,13 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   assert.equal(f12.points.length, 12 + 1 + 12);
   near(f12.end.trend, 2_400_000 + 12 * 100_000); near(f12.end.afterPlans, 2_400_000 + 12 * 100_000 - 999);
 }
+// Plan income adds to the line as it falls due: a one-time 10,000 and 5,000 a month from January.
+{
+  const inc = [pay("2026-12-01", 10_000), pay("2027-01-15", 5_000), pay("2027-02-15", 5_000), pay("2026-10-01", 777)];
+  const fi = forecast(series, "2026-11-08", [pay("2026-12-15", 50_000)], 6, 12, inc);
+  assert.deepEqual(fi.income.map((p) => p.date), ["2026-12-01", "2027-01-15", "2027-02-15"]);
+  near(fi.points.find((p) => p.date === "2026-12-08").afterPlans, 2_500_000 + 10_000);
+  near(fi.end.afterPlans, 3_000_000 - 50_000 + 20_000);
+  near(fi.end.trend, 3_000_000);
+}
 console.log("forecast ok");

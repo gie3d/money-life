@@ -134,8 +134,12 @@ export const labelOf = (list: readonly { id: string; label: string }[], id: stri
 
 export const CURRENCIES = ["THB", "USD", "EUR", "GBP", "JPY", "SGD", "AUD", "CAD"] as const;
 
+/** An expense plan holds costs (a car, a trip); an income plan holds money coming in (a salary, a bonus). */
+export type PlanKind = "expense" | "income";
+
 export type Plan = {
   id: number;
+  kind: PlanKind;
   name: string;
   monthlySaving: number;
   /** Free text about the plan, in Markdown. */
@@ -152,9 +156,13 @@ export const FREQUENCIES = [
 
 export type Frequency = (typeof FREQUENCIES)[number]["id"];
 
+/** A plan's items are what it costs, or money expected in (a bonus, a salary). */
+export type PlanItemKind = "cost" | "income";
+
 export type PlanItem = {
   id: number;
   planId: number;
+  kind: PlanItemKind;
   name: string;
   amount: number;
   frequency: Frequency;

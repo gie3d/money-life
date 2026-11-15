@@ -11,7 +11,7 @@ import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
 import { forecast } from "@/lib/forecast";
-import { payments } from "@/lib/plan";
+import { incomePayments, payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
 import { remindAfterDays } from "@/lib/types";
@@ -20,8 +20,19 @@ import { remindAfterDays } from "@/lib/types";
  * Home answers three questions, each with one figure up front and the detail a tap away: how much you have, whether
  * it's going up, and whether your goals are on track.
  */
-export default async function Home() {
+/** How far the "Where it's heading" chart looks back and ahead, in months. */
+const SPANS = [
+  { months: 3, label: "±3 months" },
+  { months: 6, label: "±6 months" },
+  { months: 12, label: "±1 year" },
+  { months: 36, label: "±3 years" },
+  { months: 60, label: "±5 years" },
+];
+
+export default async function Home({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
+  const spanParam = (await searchParams).span;
+  const span = SPANS.find((o) => String(o.months) === spanParam)?.months ?? 12;
   const cur = user.currency;
 
   const [accounts, entries, trades, prices, plans, planItems] = await Promise.all([
@@ -109,11 +120,16 @@ export default async function Home() {
   const itemPlan = new Map(planItems.map((i) => [i.id, planName.get(i.planId) ?? ""]));
   // Archived plans are put aside, so their costs are left out.
   const activePlans = new Set(plans.filter((p) => !p.archived).map((p) => p.id));
-  // Twelve months back as recorded, twelve ahead on the trend.
-  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(planItems.filter((i) => activePlans.has(i.planId))), 12);
+  // The chosen span (a year by default) back as recorded and ahead on the trend; the trend itself is always the last 12 months.
+  const activeItems = planItems.filter((i) => activePlans.has(i.planId));
+  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(activeItems), span, 12, incomePayments(activeItems));
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
+  const incomeDue = ahead.income.reduce((s, p) => s + p.amount, 0);
+  const hasPlans = planDue > 0 || incomeDue > 0;
+  // Costs and income together, in date order, for the list under "More detail".
+  const planned = [...ahead.payments.map((p) => ({ ...p, income: false })), ...ahead.income.map((p) => ({ ...p, income: true }))].sort((a, b) => a.date.localeCompare(b.date));
 
-  const forecastEnd = planDue > 0 ? ahead.end.afterPlans : ahead.end.trend;
+  const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
@@ -147,7 +163,7 @@ export default async function Home() {
               Where it&apos;s heading
               <Info>
                 The trend carries on the average monthly change in your total value over the last 12 months (or since your first record), money added or taken out included.
-                {planDue > 0 && " The red line also takes off the payments in your plans as they fall due."} It is a forecast only: your assets are not changed.
+                {hasPlans && " The dotted line also takes off the costs in your plans, and adds their income, as they fall due."} It is a forecast only: your assets are not changed.
               </Info>
             </h2>
             <p className="text-xs text-ink-3">
@@ -155,26 +171,35 @@ export default async function Home() {
             </p>
           </div>
           <div className="text-right">
-            <p className="eyebrow">By {day(ahead.end.date)}{planDue > 0 && ", after plan costs"}</p>
+            <p className="eyebrow">By {day(ahead.end.date)}{hasPlans && ", after plans"}</p>
             <p className={`num text-2xl font-extrabold ${forecastEnd < 0 ? "text-miss-text" : ""}`}>{money(forecastEnd, cur)}</p>
           </div>
         </div>
-        <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={planDue > 0} />
-        {(planDue > 0 || ahead.payments.length > 0) && (
+        <nav aria-label="How far to look" className="mb-3 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
+          {SPANS.map((o) => (
+            <Link key={o.months} href={o.months === 12 ? "/" : `/?span=${o.months}`} scroll={false} aria-current={o.months === span ? "true" : undefined}
+              className={`rounded-full px-3 py-1 ${o.months === span ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
+              {o.label}
+            </Link>
+          ))}
+        </nav>
+        <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={hasPlans} />
+        {hasPlans && (
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-semibold text-ink-2">More detail</summary>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
               <Stat label="On trend" value={money(ahead.end.trend, cur)} />
               {planDue > 0 && <Stat label="Plan costs due" value={`−${money(planDue, cur)}`} cls="text-miss-text" />}
-              {planDue > 0 && <Stat label="After plan costs" value={money(ahead.end.afterPlans, cur)} cls={ahead.end.afterPlans < 0 ? "text-miss-text" : ""} />}
+              {incomeDue > 0 && <Stat label="Plan income due" value={`+${money(incomeDue, cur)}`} cls="text-go-text" />}
+              {hasPlans && <Stat label="After plans" value={money(ahead.end.afterPlans, cur)} cls={ahead.end.afterPlans < 0 ? "text-miss-text" : ""} />}
             </div>
-            {ahead.payments.length > 0 && (
+            {planned.length > 0 && (
               <ul className="mt-3 divide-y divide-line">
-                {ahead.payments.map((p, i) => (
+                {planned.map((p, i) => (
                   <li key={`${p.itemId}-${p.date}-${i}`} className="flex items-center gap-3 py-2">
                     <span className="num w-24 shrink-0 text-ink-3">{day(p.date)}</span>
                     <span className="min-w-0 flex-1 truncate">{p.name}<span className="text-ink-3"> · {itemPlan.get(p.itemId)}</span></span>
-                    <span className="num font-semibold">{money(p.amount, cur)}</span>
+                    <span className={`num font-semibold ${p.income ? "text-go-text" : ""}`}>{p.income ? "+" : ""}{money(p.amount, cur)}</span>
                   </li>
                 ))}
               </ul>

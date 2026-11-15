@@ -34,7 +34,7 @@ export async function listAccounts(userId: number, includeArchived = false): Pro
   const { rows } = await pool.query(
     `SELECT a.id, a.name, a.category_id, c.name AS category_name, c.color AS category_color, c.type, a.liquidity, a.archived, a.notes
      FROM accounts a JOIN categories c ON c.id = a.category_id
-     WHERE a.user_id = $1 ${includeArchived ? "" : "AND NOT a.archived"} ORDER BY a.created_at, a.id`,
+     WHERE a.user_id = $1 ${includeArchived ? "" : "AND NOT a.archived"} ORDER BY a.position, a.created_at, a.id`,
     [userId],
   );
   return rows.map(toAccount);
@@ -149,18 +149,18 @@ export async function listPrices(userId: number, accountId?: number, fiat = fals
 }
 
 const toPlan = (r: Record<string, unknown>): Plan => ({
-  id: Number(r.id), name: r.name as string, monthlySaving: Number(r.monthly_saving), notes: (r.notes as string | null) ?? null,
+  id: Number(r.id), kind: r.kind as Plan["kind"], name: r.name as string, monthlySaving: Number(r.monthly_saving), notes: (r.notes as string | null) ?? null,
   archived: r.archived as boolean,
 });
 
 export async function listPlans(userId: number): Promise<Plan[]> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
+  const { rows } = await pool.query("SELECT id, kind, name, monthly_saving, notes, archived FROM plans WHERE user_id = $1 ORDER BY created_at, id", [userId]);
   const fx = await btcFx(userId);
   return rows.map(toPlan).map((p) => (fx ? { ...p, monthlySaving: fx.now(p.monthlySaving) } : p));
 }
 
 export async function getPlan(userId: number, id: number): Promise<Plan | null> {
-  const { rows } = await pool.query("SELECT id, name, monthly_saving, notes, archived FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
+  const { rows } = await pool.query("SELECT id, kind, name, monthly_saving, notes, archived FROM plans WHERE id = $1 AND user_id = $2", [id, userId]);
   const fx = await btcFx(userId);
   const plan = rows[0] ? toPlan(rows[0]) : null;
   return plan && fx ? { ...plan, monthlySaving: fx.now(plan.monthlySaving) } : plan;
@@ -169,7 +169,7 @@ export async function getPlan(userId: number, id: number): Promise<Plan | null> 
 /** The costs of one plan, or of all the user's plans. */
 export async function listPlanItems(userId: number, planId?: number): Promise<PlanItem[]> {
   const { rows } = await pool.query(
-    `SELECT i.id, i.plan_id, i.name, i.amount, i.frequency, i.start_date::text AS start_date, i.occurrences
+    `SELECT i.id, i.plan_id, i.kind, i.name, i.amount, i.frequency, i.start_date::text AS start_date, i.occurrences
      FROM plan_items i JOIN plans p ON p.id = i.plan_id
      WHERE p.user_id = $1 ${planId ? "AND p.id = $2" : ""} ORDER BY i.start_date, i.id`,
     planId ? [userId, planId] : [userId],
@@ -178,6 +178,7 @@ export async function listPlanItems(userId: number, planId?: number): Promise<Pl
   return rows.map((r) => ({
     id: Number(r.id),
     planId: Number(r.plan_id),
+    kind: r.kind as PlanItem["kind"],
     name: r.name as string,
     amount: fx ? fx.now(Number(r.amount)) : Number(r.amount),
     frequency: r.frequency as Frequency,

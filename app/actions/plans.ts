@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
 import { getPlan } from "@/lib/data";
 import { requireEditable } from "@/lib/session";
-import { FREQUENCIES, type Frequency } from "@/lib/types";
+import { FREQUENCIES, type Frequency, type PlanItemKind } from "@/lib/types";
 import type { FormState } from "./auth";
 
 const num = (v: FormDataEntryValue | null) => {
@@ -20,9 +20,10 @@ export async function createPlan(_: FormState, form: FormData): Promise<FormStat
   if (!name) return { error: "Give the plan a name." };
   if (name.length > 80) return { error: "Keep the name under 80 characters." };
 
-  const { rows } = await pool.query("INSERT INTO plans (user_id, name) VALUES ($1, $2) RETURNING id", [user.id, name]);
-  // Cash and saving are the natural place to pay from, so they start ticked.
-  await pool.query(
+  const kind = form.get("kind") === "income" ? "income" : "expense";
+  const { rows } = await pool.query("INSERT INTO plans (user_id, name, kind) VALUES ($1, $2, $3) RETURNING id", [user.id, name, kind]);
+  // Cash and saving are the natural place to pay an expense from, so they start ticked.
+  if (kind === "expense") await pool.query(
     `INSERT INTO plan_assets (plan_id, account_id)
      SELECT $1, a.id FROM accounts a JOIN categories c ON c.id = a.category_id
      WHERE a.user_id = $2 AND NOT a.archived AND c.type IN ('cash', 'saving')`,
@@ -35,8 +36,14 @@ export async function createPlan(_: FormState, form: FormData): Promise<FormStat
 export async function updatePlan(planId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireEditable();
   const name = String(form.get("name") ?? "").trim();
-  const saving = form.get("saving") === "" ? 0 : num(form.get("saving"));
   if (!name || name.length > 80) return { error: "Use a name of 1 to 80 characters." };
+  // An income plan has no monthly saving; its form only sends the name.
+  if (!form.has("saving")) {
+    await pool.query("UPDATE plans SET name = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, name]);
+    revalidatePath("/", "layout");
+    return;
+  }
+  const saving = form.get("saving") === "" ? 0 : num(form.get("saving"));
   if (!(saving >= 0)) return { error: "The monthly saving must be zero or more." };
 
   await pool.query("UPDATE plans SET name = $3, monthly_saving = $4 WHERE id = $1 AND user_id = $2", [planId, user.id, name, saving]);
@@ -67,40 +74,45 @@ export async function deletePlan(planId: number) {
   redirect("/plans");
 }
 
-type ItemInput = { name: string; amount: number; frequency: Frequency; startDate: string; occurrences: number };
+type ItemInput = { kind: PlanItemKind; name: string; amount: number; frequency: Frequency; startDate: string; occurrences: number };
 
-function readItem(form: FormData): ItemInput | { error: string } {
+function readItem(form: FormData, kind: PlanItemKind): ItemInput | { error: string } {
+  const what = kind === "income" ? "income" : "cost";
   const name = String(form.get("name") ?? "").trim();
   const amount = num(form.get("amount"));
   const frequency = String(form.get("frequency") ?? "") as Frequency;
   const startDate = String(form.get("date") ?? "");
   const count = num(form.get("occurrences"));
-  if (!name || name.length > 80) return { error: "Name the cost, up to 80 characters." };
+  if (!name || name.length > 80) return { error: `Name the ${what}, up to 80 characters.` };
   if (!(amount > 0)) return { error: "Enter the amount, more than zero." };
   if (!FREQUENCIES.some((f) => f.id === frequency)) return { error: "Pick how often it is paid." };
   if (!isDate(startDate)) return { error: "Pick a date." };
   if (frequency !== "once" && !(Number.isInteger(count) && count >= 1 && count <= 600)) {
     return { error: "Enter how many payments, from 1 to 600." };
   }
-  return { name, amount, frequency, startDate, occurrences: frequency === "once" ? 1 : count };
+  return { kind, name, amount, frequency, startDate, occurrences: frequency === "once" ? 1 : count };
 }
 
 export async function addPlanItem(planId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireEditable();
-  if (!(await getPlan(user.id, planId))) return { error: "That plan no longer exists." };
-  const it = readItem(form);
+  const plan = await getPlan(user.id, planId);
+  if (!plan) return { error: "That plan no longer exists." };
+  const it = readItem(form, plan.kind === "income" ? "income" : "cost");
   if ("error" in it) return it;
 
   await pool.query(
-    "INSERT INTO plan_items (plan_id, name, amount, frequency, start_date, occurrences) VALUES ($1, $2, $3, $4, $5, $6)",
-    [planId, it.name, it.amount, it.frequency, it.startDate, it.occurrences],
+    "INSERT INTO plan_items (plan_id, kind, name, amount, frequency, start_date, occurrences) VALUES ($1, $7, $2, $3, $4, $5, $6)",
+    [planId, it.name, it.amount, it.frequency, it.startDate, it.occurrences, it.kind],
   );
   revalidatePath("/", "layout");
 }
 
 export async function updatePlanItem(itemId: number, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireEditable();
-  const it = readItem(form);
+  // An item keeps the kind of the plan it is in.
+  const own = await pool.query("SELECT i.kind FROM plan_items i JOIN plans p ON p.id = i.plan_id WHERE i.id = $1 AND p.user_id = $2", [itemId, user.id]);
+  if (!own.rowCount) return { error: "That item no longer exists." };
+  const it = readItem(form, own.rows[0].kind as PlanItemKind);
   if ("error" in it) return it;
 
   const { rowCount } = await pool.query(
@@ -108,7 +120,7 @@ export async function updatePlanItem(itemId: number, _: FormState, form: FormDat
      FROM plans p WHERE i.id = $1 AND p.id = i.plan_id AND p.user_id = $2`,
     [itemId, user.id, it.name, it.amount, it.frequency, it.startDate, it.occurrences],
   );
-  if (!rowCount) return { error: "That cost no longer exists." };
+  if (!rowCount) return { error: "That item no longer exists." };
   revalidatePath("/", "layout");
 }
 

@@ -12,10 +12,10 @@ import { deletePlan, deletePlanItem, setPlanArchived, updatePlanNotes } from "@/
 import { getPlan, listAccounts, listCategories, listEntries, listPlanAssets, listPlanItems, listPrices, listTrades } from "@/lib/data";
 import { sortByCategory } from "@/lib/group";
 import { day, money, monthLabel, tone } from "@/lib/format";
-import { finish, monthsText, payments, schedule } from "@/lib/plan";
+import { finish, incomePayments, monthsText, payments, schedule } from "@/lib/plan";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
-import { FREQUENCIES, labelOf } from "@/lib/types";
+import { FREQUENCIES, labelOf, type Plan, type PlanItem } from "@/lib/types";
 
 export async function generateMetadata({ params }: PageProps<"/plans/[id]">) {
   const user = await requireUser();
@@ -34,11 +34,13 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
     listPlanItems(user.id, plan.id), listPlanAssets(user.id),
     listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id), listCategories(user.id),
   ]);
+  if (plan.kind === "income") return <IncomePlan plan={plan} items={items} currency={cur} />;
   const held = holdings(accounts, entries, trades, prices);
   const chosen = new Set(funding.get(plan.id) ?? []);
   const funds = held.filter((h) => chosen.has(h.account.id)).reduce((s, h) => s + h.value, 0);
 
   const today = new Date().toISOString().slice(0, 10);
+  const costItems = items;
   const all = payments(items);
   const end = finish(all, today);
   const s = schedule(all, funds, plan.monthlySaving, today);
@@ -90,7 +92,7 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
             cls={tone(s.low.balance)}
           />
         ) : (
-          <Figure label="Status" value={items.length === 0 ? "No costs yet" : "All paid"} />
+          <Figure label="Status" value={costItems.length === 0 ? "No costs yet" : "All paid"} />
         )}
       </section>
 
@@ -104,10 +106,10 @@ export default async function PlanPage({ params }: PageProps<"/plans/[id]">) {
 
       <PlanItemForm planId={plan.id} currency={cur} />
 
-      {items.length > 0 && (
+      {costItems.length > 0 && (
         <section className="card divide-y divide-line">
           <h2 className="p-4 text-lg sm:px-6">Costs</h2>
-          {items.map((it) => (
+          {costItems.map((it) => (
             <div key={it.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{it.name}</p>
@@ -198,6 +200,104 @@ function Figure({ label, value, hint, cls = "" }: { label: string; value: string
       <p className="eyebrow">{label}</p>
       <p className={`num text-xl font-bold ${cls}`}>{value}</p>
       {hint && <p className={`num text-xs ${cls || "text-ink-3"}`}>{hint}</p>}
+    </div>
+  );
+}
+
+/** An income plan: money coming in (a salary, a bonus), with no funds or schedule to cover. */
+function IncomePlan({ plan, items, currency: cur }: { plan: Plan; items: PlanItem[]; currency: string }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = incomePayments(items);
+  const coming = all.filter((p) => p.date >= today);
+  const total = all.reduce((t, p) => t + p.amount, 0);
+  const remaining = coming.reduce((t, p) => t + p.amount, 0);
+  const next = coming[0];
+  const end = finish(all, today);
+  const year = today.slice(0, 4);
+  const thisYear = coming.filter((p) => p.date.startsWith(year)).reduce((t, p) => t + p.amount, 0);
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+      <Breadcrumb items={[{ label: "Plans", href: "/plans?tab=income" }, ...(plan.archived ? [{ label: "All plans", href: "/plans/all" }] : []), { label: plan.name }]} />
+      <h1 className="text-3xl">{plan.name}{plan.archived && <span className="ml-3 align-middle text-sm font-semibold text-ink-3">archived</span>}</h1>
+      {plan.archived && (
+        <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
+          This plan is archived: it&apos;s kept, but not shown on the Plans page or counted in the forecast on Home.
+        </p>
+      )}
+
+      {plan.notes ? (
+        <section className="card p-5 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-lg">Notes</h2>
+            <NotesEditor notes={plan.notes} save={updatePlanNotes.bind(null, plan.id)} placeholder="Where it comes from, contract, raise dates…" />
+          </div>
+          <Markdown>{plan.notes}</Markdown>
+        </section>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-ink-3">
+          <NotesEditor notes={null} save={updatePlanNotes.bind(null, plan.id)} placeholder="Where it comes from, contract, raise dates…" />
+          <span>Keep details about this income here.</span>
+        </div>
+      )}
+
+      <section className="card grid grid-cols-2 gap-4 p-5 sm:grid-cols-4 sm:p-6">
+        <Figure label="Total income" value={money(total, cur)} />
+        <Figure label="Still to come" value={money(remaining, cur)} hint={next ? `next ${day(next.date)}` : undefined} />
+        <Figure label="Still to come this year" value={money(thisYear, cur)} hint={`to Dec 31, ${year}`} />
+        {end ? <Figure label={end.done ? "Finished" : "Last payment"} value={day(end.date)} hint={end.done ? undefined : `in ${monthsText(end.monthsLeft)}`} /> : <Figure label="Status" value="No income yet" />}
+      </section>
+
+      <PlanItemForm planId={plan.id} currency={cur} kind="income" />
+
+      {items.length > 0 && (
+        <section className="card divide-y divide-line">
+          <h2 className="p-4 text-lg sm:px-6">Income</h2>
+          {items.map((it) => (
+            <div key={it.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{it.name}</p>
+                <p className="text-xs text-ink-3">
+                  {it.frequency === "once"
+                    ? `One-time · ${day(it.startDate)}`
+                    : `Recurring, ${it.frequency === "yearly" ? "every year" : "every month"} · ${it.occurrences} payments from ${day(it.startDate)}`}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="num font-semibold text-go-text">+{money(it.amount * it.occurrences, cur)}</p>
+                {it.occurrences > 1 && <p className="num text-xs text-ink-3">{money(it.amount, cur)} each</p>}
+              </div>
+              <EditPlanItem item={it} currency={cur} />
+              <ConfirmDelete
+                action={deletePlanItem.bind(null, it.id)}
+                title={`Delete ${it.name}?`}
+                message="This income, and all of its payments, will be removed from the plan."
+                triggerLabel={`Delete ${it.name}`}
+                triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2"
+              >
+                ×
+              </ConfirmDelete>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <PlanSettings plan={plan} currency={cur} />
+
+      <div className="flex flex-wrap gap-2">
+        <form action={setPlanArchived.bind(null, plan.id, !plan.archived)}>
+          <button className="btn btn-quiet">{plan.archived ? "Bring back" : "Archive plan"}</button>
+        </form>
+        <ConfirmDelete
+          action={deletePlan.bind(null, plan.id)}
+          title={`Delete ${plan.name}?`}
+          message="The plan and all of its income will be deleted. Your assets aren't touched."
+          confirmLabel="Delete plan"
+          triggerClassName="btn btn-quiet text-miss-text"
+        >
+          Delete plan
+        </ConfirmDelete>
+      </div>
     </div>
   );
 }

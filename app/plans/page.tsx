@@ -5,20 +5,23 @@ import SectionTabs from "@/components/SectionTabs";
 import PlanForm from "@/components/PlanForm";
 import { listAccounts, listEntries, listPlanAssets, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { day, money, monthLabel, tone } from "@/lib/format";
-import { finish, monthsText, payments, schedule } from "@/lib/plan";
+import { finish, incomePayments, monthsText, payments, schedule } from "@/lib/plan";
 import { holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
+import type { Plan, PlanItem } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Plans" };
 
-export default async function PlansPage() {
+export default async function PlansPage({ searchParams }: PageProps<"/plans">) {
   const user = await requireUser();
   const cur = user.currency;
-  const [plans, items, funding, accounts, entries, trades, prices] = await Promise.all([
+  const tab = (await searchParams).tab === "income" ? "income" : "expense";
+  const [allPlans, items, funding, accounts, entries, trades, prices] = await Promise.all([
     listPlans(user.id), listPlanItems(user.id), listPlanAssets(user.id),
     listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id),
   ]);
   const held = holdings(accounts, entries, trades, prices);
+  const plans = allPlans.filter((p) => p.kind === tab);
   const today = new Date().toISOString().slice(0, 10);
   const active = plans.filter((p) => !p.archived);
   const archivedCount = plans.length - active.length;
@@ -48,14 +51,31 @@ export default async function PlansPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl">Plans</h1>
-          <p className="text-sm text-ink-3">Plan something you are going to pay for, and see if your assets cover it, month by month.</p>
+          <p className="text-sm text-ink-3">
+            {tab === "income"
+              ? "Money you expect to come in, like a salary or a bonus. It is added to where your total is heading on Home."
+              : "Plan something you are going to pay for, and see if your assets cover it, month by month."}
+          </p>
         </div>
-        {plans.length > 0 && (
+        {allPlans.length > 0 && (
           <Link href="/plans/all" className="text-sm font-semibold text-brand">
-            All plans ({plans.length}{archivedCount > 0 ? `, ${archivedCount} archived` : ""}) →
+            All plans ({allPlans.length}{allPlans.length > allPlans.filter((p) => !p.archived).length ? `, ${allPlans.length - allPlans.filter((p) => !p.archived).length} archived` : ""}) →
           </Link>
         )}
       </div>
+      <nav aria-label="Kind of plan" className="inline-flex rounded-full bg-surface-2 p-0.5 text-sm font-semibold">
+        {([["income", "Income"], ["expense", "Expense"]] as const).map(([id, label]) => (
+          <Link key={id} href={id === "expense" ? "/plans" : "/plans?tab=income"} aria-current={id === tab ? "true" : undefined}
+            className={`rounded-full px-4 py-1.5 ${id === tab ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "income" ? (
+        <IncomeTab plans={active} items={items} currency={cur} today={today} archivedCount={archivedCount} />
+      ) : (
+        <>
 
       {active.length === 0 && archivedCount > 0 && (
         <p className="text-sm text-ink-3">All your plans are archived. Open <Link href="/plans/all" className="font-semibold text-brand">All plans</Link> to bring one back.</p>
@@ -149,6 +169,76 @@ export default async function PlansPage() {
         </div>
       )}
       <PlanForm />
+        </>
+      )}
     </div>
+  );
+}
+
+/** The income tab: what is coming in across the active income plans, and each plan. */
+function IncomeTab({ plans, items, currency: cur, today, archivedCount }: { plans: Plan[]; items: PlanItem[]; currency: string; today: string; archivedCount: number }) {
+  const year = today.slice(0, 4);
+  const mine = (id: number) => items.filter((i) => i.planId === id);
+  const ids = new Set(plans.map((p) => p.id));
+  const coming = incomePayments(items.filter((i) => ids.has(i.planId))).filter((p) => p.date >= today);
+  const thisYear = coming.filter((p) => p.date.startsWith(year)).reduce((t, p) => t + p.amount, 0);
+  const remaining = coming.reduce((t, p) => t + p.amount, 0);
+  const next = coming[0];
+
+  return (
+    <>
+      {plans.length === 0 && archivedCount > 0 && (
+        <p className="text-sm text-ink-3">All your income plans are archived. Open <Link href="/plans/all" className="font-semibold text-brand">All plans</Link> to bring one back.</p>
+      )}
+      {plans.length > 0 && (
+        <section className="card grid grid-cols-1 gap-4 p-5 sm:grid-cols-3 sm:p-6">
+          <div>
+            <p className="eyebrow">Still to come this year</p>
+            <p className="num text-xl font-bold text-go-text">+{money(thisYear, cur)}</p>
+            <p className="text-xs text-ink-3">from today to Dec 31, {year}</p>
+          </div>
+          <div>
+            <p className="eyebrow">Still to come in all</p>
+            <p className="num text-xl font-bold text-go-text">+{money(remaining, cur)}</p>
+            <p className="text-xs text-ink-3">across active income plans</p>
+          </div>
+          <div>
+            <p className="eyebrow">Next payment</p>
+            <p className="num text-xl font-bold">{next ? money(next.amount, cur) : "None"}</p>
+            <p className="text-xs text-ink-3">{next ? `${next.name} · ${day(next.date)}` : "nothing dated from today"}</p>
+          </div>
+        </section>
+      )}
+      {plans.length > 0 && (
+        <div className="grid gap-5 md:grid-cols-2">
+          {plans.map((plan) => {
+            const all = incomePayments(mine(plan.id));
+            const left = all.filter((p) => p.date >= today);
+            const end = finish(all, today);
+            const nextOne = left[0];
+            return (
+              <Link key={plan.id} href={`/plans/${plan.id}`} className="card block space-y-3 p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-lg">{plan.name}</h2>
+                  <p className="num text-lg font-bold text-go-text">+{money(all.reduce((t, p) => t + p.amount, 0), cur)}</p>
+                </div>
+                {all.length === 0 ? (
+                  <p className="text-sm text-ink-3">No income yet. Open it to add some.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-ink-3">
+                      Still to come <span className="num font-semibold text-ink">{money(left.reduce((t, p) => t + p.amount, 0), cur)}</span>
+                      {nextOne && <> · next {money(nextOne.amount, cur)} on {day(nextOne.date)}</>}
+                    </p>
+                    {end && <p className="text-sm text-ink-3">{end.done ? "Finished" : "Last payment"} <span className="font-semibold text-ink">{day(end.date)}</span>{!end.done && ` · in ${monthsText(end.monthsLeft)}`}</p>}
+                  </>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      <PlanForm kind="income" />
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SectionTabs from "@/components/SectionTabs";
+import SortableAssets from "@/components/SortableAssets";
 import AccountForm from "@/components/AccountForm";
 import AllocationBars, { type AllocationRow } from "@/components/AllocationBars";
 import Info from "@/components/Info";
@@ -96,11 +97,11 @@ export default async function AccountsPage() {
                   </p>
                 </div>
               </div>
-              {members.map((a) => {
+              <SortableAssets categoryId={category.id} rows={members.map((a) => {
                 const latest = held.find((x) => x.account.id === a.id);
                 const trend = trendOf([a]);
-                return (
-                  <Link key={a.id} href={`/accounts/${a.id}`} className={`flex items-center gap-3 px-4 py-3.5 hover:bg-surface-2 sm:px-6 ${a.archived ? "opacity-60" : ""}`}>
+                return { id: a.id, node: (
+                  <Link href={`/accounts/${a.id}`} className={`flex items-center gap-3 px-4 py-3.5 hover:bg-surface-2 sm:px-6 ${a.archived ? "opacity-60" : ""}`}>
                     <div className="min-w-0 flex-1 pl-6">
                       <p className="truncate font-semibold">{a.name}{a.archived && <span className="ml-2 text-xs font-medium text-ink-3">archived</span>}</p>
                       <p className="text-xs text-ink-3">{labelOf(LIQUIDITY, a.liquidity)}</p>
@@ -116,8 +117,8 @@ export default async function AccountsPage() {
                       )}
                     </div>
                   </Link>
-                );
-              })}
+                ) };
+              })} />
             </section>
           ))}
           {byCategory.length > 1 && <AllocationBars byCategory={byCategory} byLiquidity={byLiquidity} currency={cur} />}

@@ -4,7 +4,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import { setPlanArchived } from "@/app/actions/plans";
 import { listPlanItems, listPlans } from "@/lib/data";
 import { day, money } from "@/lib/format";
-import { finish, payments, schedule } from "@/lib/plan";
+import { finish, incomePayments, payments, schedule } from "@/lib/plan";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "All plans" };
@@ -33,21 +33,24 @@ export default async function AllPlansPage() {
               <thead>
                 <tr className="eyebrow text-left">
                   <th className="py-2 pl-4 sm:pl-6">Plan</th>
+                  <th className="py-2">Type</th>
                   <th className="py-2">Status</th>
-                  <th className="py-2 text-right">Total cost</th>
-                  <th className="py-2 text-right">Still to pay</th>
+                  <th className="py-2 text-right">Total</th>
+                  <th className="py-2 text-right">Still to pay or come</th>
                   <th className="py-2">Finishes</th>
                   <th className="py-2 pr-4 sm:pr-6"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((plan) => {
-                  const all = payments(items.filter((i) => i.planId === plan.id));
+                  const mine = items.filter((i) => i.planId === plan.id);
+                  const all = plan.kind === "income" ? incomePayments(mine) : payments(mine);
                   const s = schedule(all, 0, 0, today);
                   const end = finish(all, today);
                   return (
                     <tr key={plan.id} className={plan.archived ? "text-ink-3" : ""}>
                       <td className="py-2.5 pl-4 font-semibold sm:pl-6"><Link href={`/plans/${plan.id}`} className="hover:underline">{plan.name}</Link></td>
+                      <td className="py-2.5">{plan.kind === "income" ? "Income" : "Expense"}</td>
                       <td className="py-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${plan.archived ? "bg-surface-2" : "bg-go-soft text-go-text"}`}>{plan.archived ? "Archived" : "Active"}</span>
                       </td>

@@ -23,12 +23,12 @@ export default function PlanSettings({ plan, currency }: { plan: Plan; currency:
           <span className="eyebrow">Name</span>
           <input name="name" required maxLength={80} defaultValue={plan.name} className="field" />
         </label>
-        <label className="block space-y-1.5">
+        {plan.kind === "expense" && <label className="block space-y-1.5">
           <span className="eyebrow">Saving towards it each month ({currency})</span>
           <NumberInput name="saving" placeholder="0" defaultValue={plan.monthlySaving > 0 ? plainNumber(plan.monthlySaving) : ""} className="field" />
-        </label>
+        </label>}
       </div>
-      <p className="text-xs text-ink-3">Money you expect to set aside every month, on top of the assets chosen below. It is added to the funds month by month.</p>
+      {plan.kind === "expense" && <p className="text-xs text-ink-3">Money you expect to set aside every month, on top of the assets chosen below. It is added to the funds month by month.</p>}
       {state?.error && <p role="alert" className="rounded-xl bg-miss-soft px-3 py-2 text-sm font-medium text-miss-text">{state.error}</p>}
       <div className="flex items-center gap-3">
         <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save settings"}</button>

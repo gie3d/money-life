@@ -6,7 +6,7 @@ import { SignGradient, signStroke, signSwatch, toned } from "./Sign";
 import { RangeLabel, rangeBrush, useRange } from "./RangeBrush";
 import type { ForecastPoint } from "@/lib/forecast";
 
-const NAMES: Record<string, string> = { actual: "Recorded", trend: "Trend", afterPlans: "After plan costs" };
+const NAMES: Record<string, string> = { actual: "Recorded", trend: "Trend", afterPlans: "After plans" };
 const month = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
 
 /** The recent months as recorded (solid), then the trend and the trend less plan costs (dashed), meeting at today. */
@@ -18,10 +18,10 @@ export default function ForecastChart({ points, today, currency, withPlans }: { 
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
         <li className="flex items-center gap-2"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Recorded</li>
         <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-go" />Trend</li>
-        {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-brand" />After plan costs</li>}
+        {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-brand" />After plans</li>}
       </ul>
       <RangeLabel from={day(points[range.start].date)} to={day(points[range.end].date)} range={range} length={points.length} />
-      <div className="h-80 w-full" role="img" aria-label="Total value over the last twelve months and forecast for the next twelve">
+      <div className="h-80 w-full" role="img" aria-label="Total value as recorded and the forecast ahead">
         <ResponsiveContainer>
           <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>

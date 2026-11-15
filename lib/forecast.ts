@@ -12,7 +12,7 @@ export type ForecastPoint = {
   actual: number | null;
   /** Today's value carried on at the recent average monthly change; null in the past. */
   trend: number | null;
-  /** The trend less plan payments due by this date; null in the past. */
+  /** The trend less plan costs and plus plan income due by this date; null in the past. */
   afterPlans: number | null;
 };
 
@@ -25,6 +25,8 @@ export type Forecast = {
   basisMonths: number;
   /** Plan payments falling from today to the end of the forecast, oldest first. */
   payments: Payment[];
+  /** Plan income falling from today to the end of the forecast, oldest first. */
+  income: Payment[];
   /** Value at the end of the forecast, on the trend and after plan payments. */
   end: { date: string; trend: number; afterPlans: number };
 };
@@ -40,12 +42,12 @@ function valueOn(series: Point[], date: string): number {
  * Where the total value is heading over the next `months` months. The trend continues the average monthly
  * change of the last `lookback` months (or since the first record, if that is more recent); under a month
  * of history there is no trend to go on, so it stays flat. Plan payments due from today on are then taken
- * off it as they fall. This is a forecast only: nothing is taken out of any asset.
+ * off it as they fall, and plan income due from today on is added. This is a forecast only: nothing is taken out of any asset.
  *
  * `series` is the total value over time, ending today. The history shown is the last `months` months too, one
  * point at the end of each month, then today.
  */
-export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12): Forecast {
+export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12, planIncome: Payment[] = []): Forecast {
   const now = valueOn(series, today);
   const first = series[0]?.date ?? today;
   const back = addMonths(today, -lookback);
@@ -57,6 +59,8 @@ export function forecast(series: Point[], today: string, planPayments: Payment[]
   const horizon = addMonths(today, months);
   const payments = planPayments.filter((p) => p.date >= today && p.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
   const dueBy = (date: string) => payments.filter((p) => p.date <= date).reduce((s, p) => s + p.amount, 0);
+  const income = planIncome.filter((p) => p.date >= today && p.date <= horizon).sort((a, b) => a.date.localeCompare(b.date));
+  const incomeBy = (date: string) => income.filter((p) => p.date <= date).reduce((s, p) => s + p.amount, 0);
 
   const points: ForecastPoint[] = [];
   // History: the end of each of the last months, from the first record on.
@@ -66,13 +70,13 @@ export function forecast(series: Point[], today: string, planPayments: Payment[]
     if (date >= first && date < today) points.push({ date, actual: valueOn(series, date), trend: null, afterPlans: null });
   }
   // Today joins the lines; payments due today have not left the recorded value yet.
-  points.push({ date: today, actual: now, trend: now, afterPlans: now - dueBy(today) });
+  points.push({ date: today, actual: now, trend: now, afterPlans: now - dueBy(today) + incomeBy(today) });
   for (let k = 1; k <= months; k++) {
     const date = addMonths(today, k);
     const trend = now + monthly * k;
-    points.push({ date, actual: null, trend, afterPlans: trend - dueBy(date) });
+    points.push({ date, actual: null, trend, afterPlans: trend - dueBy(date) + incomeBy(date) });
   }
 
   const last = points[points.length - 1];
-  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans! } };
+  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans! } };
 }

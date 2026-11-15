@@ -4,6 +4,31 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.6.0] - 2026-11-15
+
+### Plans
+- The Plans page has two tabs: **Expense** (a car, a trip: the plans you pay for, as before) and **Income** (a salary,
+  a bonus, a new job). An income plan holds money coming in: one-time (a bonus on a date) or recurring (every month or
+  every year, for the number of payments you set). Its page shows what is still to come, and each tab has its own
+  "Start a plan" form. "All plans" lists both, with a Type column.
+- A plan that held both costs and income is split: the income moves to a new "<name> income" plan.
+
+### Home
+- "Where it's heading" counts plan income: it is added to the dotted line as it falls due, next to the plan costs
+  taken off it. The line is now called **After plans**, and "More detail" lists the costs and the income together.
+
+## [1.5.1] - 2026-11-15
+
+### Home
+- "Where it's heading" has a switch for how far it looks back and ahead: ±3 months, ±6 months, ±1 year (as before)
+  ±3 years or ±5 years.
+
+## [1.5.0] - 2026-11-15
+
+### Assets
+- Drag an asset up or down within its category on the Assets page to put them in your own order. The order is saved
+  when you drop it, and a new asset goes to the end of its category.
+
 ## [1.4.0] - 2026-11-12
 
 ### Spending

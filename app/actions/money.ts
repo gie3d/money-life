@@ -27,11 +27,25 @@ export async function createAccount(_: FormState, form: FormData): Promise<FormS
   if (!LIQUIDITY.some((l) => l.id === liquidity)) return { error: "Pick how liquid it is." };
 
   const { rows } = await pool.query(
-    "INSERT INTO accounts (user_id, name, category_id, liquidity) VALUES ($1, $2, $3, $4) RETURNING id",
+    `INSERT INTO accounts (user_id, name, category_id, liquidity, position)
+     VALUES ($1, $2, $3, $4, (SELECT coalesce(max(position), 0) + 1 FROM accounts WHERE category_id = $3)) RETURNING id`,
     [user.id, name, categoryId, liquidity],
   );
   revalidatePath("/", "layout");
   redirect(`/accounts/${rows[0].id}`);
+}
+
+/** Saves the order of the assets in one category, as the ids from first to last. */
+export async function reorderAccounts(categoryId: number, ids: number[]) {
+  const user = await requireEditable();
+  const { rows } = await pool.query("SELECT id FROM accounts WHERE user_id = $1 AND category_id = $2", [user.id, categoryId]);
+  const known = new Set(rows.map((r) => Number(r.id)));
+  // Only a full, duplicate-free list of this category's own assets is accepted.
+  if (ids.length !== known.size || new Set(ids).size !== ids.length || !ids.every((i) => known.has(i))) return;
+  await pool.query(
+    "UPDATE accounts a SET position = v.pos FROM unnest($2::bigint[]) WITH ORDINALITY AS v(id, pos) WHERE a.id = v.id AND a.user_id = $1",
+    [user.id, ids]);
+  revalidatePath("/", "layout");
 }
 
 /**
