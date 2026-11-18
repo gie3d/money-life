@@ -1,5 +1,6 @@
 import { addMonths, type Payment } from "./plan.ts";
-import type { Point } from "./performance.ts";
+import { accountPerformance, type Point } from "./performance.ts";
+import type { Entry } from "./types.ts";
 
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
@@ -27,6 +28,8 @@ export type Forecast = {
   payments: Payment[];
   /** Plan income falling from today to the end of the forecast, oldest first. */
   income: Payment[];
+  /** How the trend was split: money saved a month and investment growth, when a model was given. */
+  model: Model | null;
   /** Value at the end of the forecast, on the trend and after plan payments. */
   end: { date: string; trend: number; afterPlans: number };
 };
@@ -47,7 +50,7 @@ function valueOn(series: Point[], date: string): number {
  * `series` is the total value over time, ending today. The history shown is the last `months` months too, one
  * point at the end of each month, then today.
  */
-export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12, planIncome: Payment[] = []): Forecast {
+export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12, planIncome: Payment[] = [], model: Model | null = null): Forecast {
   const now = valueOn(series, today);
   const first = series[0]?.date ?? today;
   const back = addMonths(today, -lookback);
@@ -73,10 +76,85 @@ export function forecast(series: Point[], today: string, planPayments: Payment[]
   points.push({ date: today, actual: now, trend: now, afterPlans: now - dueBy(today) + incomeBy(today) });
   for (let k = 1; k <= months; k++) {
     const date = addMonths(today, k);
-    const trend = now + monthly * k;
+    const trend = model ? projectAll(model, k) : now + monthly * k;
     points.push({ date, actual: null, trend, afterPlans: trend - dueBy(date) + incomeBy(date) });
   }
 
   const last = points[points.length - 1];
-  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans! } };
+  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, model, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans! } };
 }
+
+/**
+ * The trend split in two: money you put in (saved) and what your investments earned on their own (growth).
+ * Carrying the two on separately keeps a one-off deposit from reading as growth, and lets growth compound.
+ */
+export type Model = {
+  /** What the assets are worth today: investments (which grow) and everything else (which doesn't). */
+  invested: number;
+  other: number;
+  /** Average money put in a month over the lookback, withdrawals taken off: the change in value less investment gain. */
+  saved: number;
+  /** Investment growth a month, compounding: the lookback's money-weighted return spread evenly over its months. */
+  rate: number;
+  /** Months the averages are taken over (under one: no trend at all). */
+  basisMonths: number;
+};
+
+export type ModelAsset = { entries: Entry[]; investment: boolean };
+
+/** The model for a set of assets, over the last `lookback` months (or since the first record, if more recent). */
+export function model(assets: ModelAsset[], today: string, lookback = 12): Model {
+  const all = assets.flatMap((a) => a.entries);
+  const first = all.reduce((m, e) => (e.date < m ? e.date : m), today);
+  const back = addMonths(today, -lookback);
+  const from = back > first ? back : first;
+  const basisMonths = from === back ? lookback : (ms(today) - ms(from)) / DAY / MONTH_DAYS;
+  const last = (entries: Entry[], date: string) => {
+    let v = 0;
+    for (const e of [...entries].sort((a, b) => a.date.localeCompare(b.date))) if (e.date <= date) v = e.value;
+    return v;
+  };
+  let invested = 0, other = 0, change = 0, gain = 0, base = 0;
+  for (const a of assets) {
+    const now = last(a.entries, today);
+    change += now - last(a.entries, from);
+    if (!a.investment) { other += now; continue; }
+    invested += now;
+    const p = accountPerformance(a.entries, from, today);
+    if (!p) continue;
+    gain += p.gain;
+    // Each asset's capital base, as in totalPerformance, so the return is weighted by the money in each.
+    base += p.returnPct && p.returnPct !== -1 ? p.gain / p.returnPct : p.start;
+  }
+  if (basisMonths < 1) return { invested, other, saved: 0, rate: 0, basisMonths };
+  const ret = base > 0 ? gain / base : 0;
+  return { invested, other, saved: (change - gain) / basisMonths, rate: ret > -1 ? (1 + ret) ** (1 / basisMonths) - 1 : 0, basisMonths };
+}
+
+/** The value `k` months from today: investments compounding at the model's rate, plus what is saved by then (which isn't grown). */
+export const project = (m: Model, k: number) => m.other + m.invested * (1 + m.rate) ** k + m.saved * k;
+
+/** Several models as one: the sum of their projections. */
+export function combined(models: Model[]): Model & { parts: Model[] } {
+  const sum = (f: (m: Model) => number) => models.reduce((s, m) => s + f(m), 0);
+  const invested = sum((m) => m.invested);
+  // The rate shown for the whole is the money-weighted one; projections still sum the parts.
+  return { invested, other: sum((m) => m.other), saved: sum((m) => m.saved), rate: invested > 0 ? sum((m) => m.invested * m.rate) / invested : 0, basisMonths: Math.max(0, ...models.map((m) => m.basisMonths)), parts: models };
+}
+
+/** One row per forecast point: its date, and each layer's value then (recorded up to today, on its own model after). */
+export type LayerRow = { date: string } & Record<string, number | string>;
+
+/** The forecast's dates split into layers (asset categories, say), which add up to the total trend. */
+export function layered(points: ForecastPoint[], layers: { id: string; series: Point[]; model: Model }[], today: string): LayerRow[] {
+  let k = 0;
+  return points.map((p) => {
+    const row: LayerRow = { date: p.date };
+    if (p.date > today) k++;
+    for (const l of layers) row[l.id] = p.date <= today ? valueOn(l.series, p.date) : project(l.model, k);
+    return row;
+  });
+}
+
+/** A combined model projects as the sum of its parts, so the layers and the total always agree. */
+const projectAll = (m: Model & { parts?: Model[] }, k: number) => (m.parts ? m.parts.reduce((s, p) => s + project(p, k), 0) : project(m, k));

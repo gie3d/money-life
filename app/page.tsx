@@ -4,13 +4,13 @@ import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
 import { signSwatch } from "@/components/Sign";
 import StaleNotice from "@/components/StaleNotice";
-import { listAccounts, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
+import { listAccounts, listCategories, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoins } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
-import { forecast } from "@/lib/forecast";
+import { combined, forecast, layered, model } from "@/lib/forecast";
 import { incomePayments, payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -35,9 +35,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const span = SPANS.find((o) => String(o.months) === spanParam)?.months ?? 12;
   const cur = user.currency;
 
-  const [accounts, entries, trades, prices, plans, planItems] = await Promise.all([
+  const [accounts, entries, trades, prices, plans, planItems, categories] = await Promise.all([
     listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id),
-    listPlans(user.id), listPlanItems(user.id),
+    listPlans(user.id), listPlanItems(user.id), listCategories(user.id),
   ]);
   const [goals, goalVersions, { listsOf: goalLists }] = await Promise.all([listGoals(user.id), listGoalVersions(user.id), goalAssets(user.id)]);
   const rows = holdings(accounts, entries, trades, prices);
@@ -122,7 +122,24 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const activePlans = new Set(plans.filter((p) => !p.archived).map((p) => p.id));
   // The chosen span (a year by default) back as recorded and ahead on the trend; the trend itself is always the last 12 months.
   const activeItems = planItems.filter((i) => activePlans.has(i.planId));
-  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(activeItems), span, 12, incomePayments(activeItems));
+  // The trend is worked out per asset category (money saved, and investment growth compounding), so the
+  // stacked view's layers add up to the total line.
+  const catIds = [...new Set(rows.map((h) => h.account.categoryId))];
+  const layers = catIds
+    .map((id) => {
+      const idx = rows.map((h, i) => (h.account.categoryId === id ? i : -1)).filter((i) => i >= 0);
+      const c = categories.find((x) => x.id === id);
+      return {
+        id: String(id), name: c?.name ?? "Other", color: c?.color ?? "#8e8e93", rank: c ? categories.indexOf(c) : Infinity,
+        series: extendTo(netWorthSeries(idx.map((i) => lists[i]), null, today), today),
+        model: model(idx.map((i) => ({ entries: lists[i], investment: rows[i].investment })), today, 12),
+      };
+    })
+    .sort((a, b) => a.rank - b.rank);
+  const trendModel = combined(layers.map((l) => l.model));
+  const ahead = forecast(history, today, payments(activeItems), span, 12, incomePayments(activeItems), trendModel);
+  const layerRows = layered(ahead.points, layers, today);
+  const layerInfo = layers.map(({ id, name, color }) => ({ id, name, color }));
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
   const incomeDue = ahead.income.reduce((s, p) => s + p.amount, 0);
   const hasPlans = planDue > 0 || incomeDue > 0;
@@ -162,12 +179,17 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             <h2 className="flex items-center gap-2 text-lg">
               Where it&apos;s heading
               <Info>
-                The trend carries on the average monthly change in your total value over the last 12 months (or since your first record), money added or taken out included.
+                The trend splits the last 12 months (or the time since your first record) in two: the money you put in or took out, averaged per month, and what your investments earned on their own. Both carry on: the money you put in adds up month by month, and your investments keep growing at their recent rate, compounding. A large one-off deposit therefore counts as money put in, not as growth.
                 {hasPlans && " The dotted line also takes off the costs in your plans, and adds their income, as they fall due."} It is a forecast only: your assets are not changed.
               </Info>
             </h2>
             <p className="text-xs text-ink-3">
-              {ahead.basisMonths >= 1 ? <>Going <span className={`font-semibold ${tone(ahead.monthly)}`}>{signedMoney(ahead.monthly, cur)} a month</span> lately</> : "Not enough history for a trend yet"}
+              {ahead.basisMonths >= 1 ? (
+                <>
+                  Putting in <span className={`font-semibold ${tone(trendModel.saved)}`}>{signedMoney(trendModel.saved, cur)} a month</span>
+                  {trendModel.invested > 0 && <>, investments growing <span className={`font-semibold ${tone(trendModel.rate)}`}>{pct((1 + trendModel.rate) ** 12 - 1)} a year</span></>}
+                </>
+              ) : "Not enough history for a trend yet"}
             </p>
           </div>
           <div className="text-right">
@@ -183,7 +205,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             </Link>
           ))}
         </nav>
-        <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={hasPlans} />
+        <ForecastChart points={ahead.points} layerRows={layerRows} layers={layerInfo} today={today} currency={cur} withPlans={hasPlans} />
         {hasPlans && (
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-semibold text-ink-2">More detail</summary>

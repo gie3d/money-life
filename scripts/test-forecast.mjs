@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-forecast.mjs
 import assert from "node:assert/strict";
-import { forecast } from "../lib/forecast.ts";
+import { combined, forecast, layered, model, project } from "../lib/forecast.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} !~ ${b}`);
 const pt = (date, value) => ({ date, value, cost: 0 });
@@ -40,5 +40,35 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   near(fi.points.find((p) => p.date === "2026-12-08").afterPlans, 2_500_000 + 10_000);
   near(fi.end.afterPlans, 3_000_000 - 50_000 + 20_000);
   near(fi.end.trend, 3_000_000);
+}
+
+// The model: money put in, and investment growth, carried on separately.
+{
+  const e = (date, value, contribution = 0) => ({ id: 0, accountId: 0, date, value, contribution, note: null });
+  const T = "2026-11-08";
+  // Cash only: +1,000 a month is all money put in.
+  const cash = model([{ entries: [e("2025-11-08", 1_000), e(T, 13_000)], investment: false }], T);
+  near(cash.saved, 1_000); near(cash.rate, 0); near(project(cash, 12), 25_000);
+  // An investment up 10% with nothing paid in: all growth, compounding.
+  const inv = model([{ entries: [e("2025-11-08", 10_000), e(T, 11_000)], investment: true }], T);
+  near(inv.saved, 0); near((1 + inv.rate) ** 12, 1.1); near(project(inv, 12), 12_100);
+  // A 9,000 deposit half way through isn't growth: of the 10,000 rise, 9,000 was put in.
+  const dep = model([{ entries: [e("2025-11-08", 10_000), e("2026-05-08", 19_500, 9_000), e(T, 20_000)], investment: true }], T);
+  near(dep.saved * 12, 9_000); assert.ok(dep.rate > 0 && (1 + dep.rate) ** 12 < 1.1, String(dep.rate));
+  // Cash moved into a new investment is neither saved nor gained; only the investment's rise is growth.
+  const moved = model([
+    { entries: [e("2025-11-08", 10_000), e("2026-05-08", 0)], investment: false },
+    { entries: [e("2026-05-08", 10_000, 10_000), e(T, 10_500)], investment: true },
+  ], T);
+  near(moved.saved, 0); assert.ok(moved.rate > 0);
+  // Under a month of history: no trend.
+  near(model([{ entries: [e("2026-11-01", 5)], investment: false }], T).saved, 0);
+  // Layers add up to the total trend, and the forecast uses the model.
+  const both = combined([cash, inv]);
+  const total = [pt("2025-11-08", 11_000), pt(T, 24_000)];
+  const fm = forecast(total, T, [], 12, 12, [], both);
+  near(fm.end.trend, 25_000 + 12_100);
+  const rows = layered(fm.points, [{ id: "a", series: [pt("2025-11-08", 1_000), pt(T, 13_000)], model: cash }, { id: "b", series: [pt("2025-11-08", 10_000), pt(T, 11_000)], model: inv }], T);
+  rows.forEach((r, i) => { if (fm.points[i].trend !== null) near(r.a + r.b, fm.points[i].trend); });
 }
 console.log("forecast ok");

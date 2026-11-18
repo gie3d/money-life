@@ -4,6 +4,16 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.7.0] - 2026-11-18
+
+### Home
+- "Where it's heading" splits the trend into the money you put in and what your investments earned on their own.
+  The money you put in carries on at its monthly average, and your investments keep growing at their recent rate,
+  compounding. A large one-off deposit no longer reads as growth. The line under the title now says how much you
+  have been putting in a month and how fast your investments have grown in a year.
+- A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
+  trend, adding up to the total.
+
 ## [1.6.0] - 2026-11-15
 
 ### Plans
