@@ -4,6 +4,46 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.7.0] - 2026-11-18
+
+### Home
+- "Where it's heading" splits the trend into the money you put in and what your investments earned on their own.
+  The money you put in carries on at its monthly average, and your investments keep growing at their recent rate,
+  compounding. A large one-off deposit no longer reads as growth. The line under the title now says how much you
+  have been putting in a month and how fast your investments have grown in a year.
+- A shaded **likely range** around the line, from how much your investments have swung month to month over the
+  last 12 months: about two times in three the value should land inside it. It widens the further ahead it looks,
+  with more room above than below, and the figure for the end date shows it too. It needs at least 3 months of
+  investment history; the money you put in is taken as certain.
+- New **Your safety net** card. How long it would last: how many months the assets you can turn into cash within days would cover
+  your essentials (Must and Need spending, categories not sorted yet, and your bills) if nothing came in, and how
+  long at your usual spending. Spending is averaged over the last 6 whole months you recorded. Under 3 months shows
+  in red. Under it, your **savings rate**: what you kept of your income over the last 6 whole months you recorded
+  it, after everyday spending, hobbies and bills.
+- With a goal set, a **Recent trend / As your goals plan** switch. As your goals plan carries each asset in a goal on
+  at the growth and monthly amount its plan sets, from what it is worth today (the monthly amount rises as the plan
+  says and stops at the goal's date); assets in no goal stay on their trend. The switch is kept in the address with the span.
+- A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
+  trend, adding up to the total.
+
+### Install (Umbrel)
+- **Automatic backups**: a new `backup` service writes a full copy of the database to `data/backups` when it starts and
+  then once a day, keeping the last 14 days (`BACKUP_EVERY_HOURS` and `BACKUP_KEEP_DAYS` in `.env`). `./restore.sh`
+  puts the database back to one (saving a copy of the current one first), and `make backup-pull` copies the backups
+  to the computer you deploy from. See README.txt.
+
+### Assets
+- Give each asset category a **target**: the share of your total value you aim to keep in it, set beside the category
+  under Settings → Categories (which also shows what the targets add up to). On Assets, the Allocation chart marks
+  each target on its bar and says how far off it is: on target (within 2 points), or so many points over or under,
+  with the amount to add or take out to land on it. A category with a target but nothing in it yet still shows.
+  On a phone, the Categories list leaves out each category's type to make room.
+
+### Spending
+- Type the month's **income** at the top of the month's form on Everyday spending (Fill empty from last month fills it
+  too). A new **Saved** tile shows what you kept that month, after everyday spending, hobbies bought that month and
+  your bills at their monthly cost, and what share of the income that is.
+
 ## [1.6.0] - 2026-11-15
 
 ### Plans

@@ -14,9 +14,15 @@ const parse = (s: string) => (s.trim() === "" ? 0 : Number(s.replace(/,/g, "")) 
  * What each category came to in one month, all on one form. Last month's amount sits beside each box, and empty
  * boxes can be filled from it in one go. An emptied box clears that category for the month.
  */
-export default function MonthSpendingForm({ month, label, prevLabel, rows, currency }: { month: string; label: string; prevLabel: string; rows: MonthRow[]; currency: string }) {
+export default function MonthSpendingForm({ month, label, prevLabel, rows, income, currency }: {
+  month: string; label: string; prevLabel: string; rows: MonthRow[];
+  /** What came in this month and the month before; null when none is recorded. */
+  income: { amount: number | null; last: number | null };
+  currency: string;
+}) {
   const start = () => Object.fromEntries(rows.map((r) => [r.id, r.amount === null ? "" : plainNumber(r.amount)]));
   const [values, setValues] = useState<Record<number, string>>(start);
+  const [incomeValue, setIncomeValue] = useState(income.amount === null ? "" : plainNumber(income.amount));
   const [saved, setSaved] = useState(false);
   const [state, action, pending] = useActionState<FormState, FormData>(async (prev, form) => {
     const result = await saveMonth(month, prev, form);
@@ -26,22 +32,30 @@ export default function MonthSpendingForm({ month, label, prevLabel, rows, curre
 
   const total = rows.reduce((s, r) => s + parse(values[r.id] ?? ""), 0);
   const lastTotal = rows.reduce((s, r) => s + (r.last ?? 0), 0);
-  const canCopy = rows.some((r) => r.last !== null && (values[r.id] ?? "") === "");
+  const canCopy = rows.some((r) => r.last !== null && (values[r.id] ?? "") === "") || (income.last !== null && incomeValue === "");
   const set = (id: number, v: string) => { setValues((x) => ({ ...x, [id]: v })); setSaved(false); };
 
   return (
     <form action={action} className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-lg">Spending in {label}</h2>
-          <p className="text-xs text-ink-3">The total of each category for the month, and a remark if something is worth remembering. Leave a box empty if there was none.</p>
+          <h2 className="text-lg">{label}</h2>
+          <p className="text-xs text-ink-3">What came in, then the total of each category for the month, and a remark if something is worth remembering. Leave a box empty if there was none.</p>
         </div>
         {canCopy && (
           <button type="button" className="btn btn-quiet !px-3 !py-1.5 text-xs"
-            onClick={() => { setValues((x) => Object.fromEntries(rows.map((r) => [r.id, (x[r.id] ?? "") === "" && r.last !== null ? plainNumber(r.last) : x[r.id] ?? ""]))); setSaved(false); }}>
+            onClick={() => { setValues((x) => Object.fromEntries(rows.map((r) => [r.id, (x[r.id] ?? "") === "" && r.last !== null ? plainNumber(r.last) : x[r.id] ?? ""]))); if (incomeValue === "" && income.last !== null) setIncomeValue(plainNumber(income.last)); setSaved(false); }}>
             Fill empty from {prevLabel}
           </button>
         )}
+      </div>
+
+      <div className="grid grid-cols-[1fr_minmax(7rem,10rem)] items-center gap-x-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+        <label htmlFor="income" className="min-w-0">
+          <span className="block text-sm font-semibold">Income</span>
+          <span className="num block text-xs text-ink-3">{income.last === null ? `Nothing in ${prevLabel}` : `${prevLabel}: ${money(income.last, currency)}`} · for your savings rate</span>
+        </label>
+        <NumberInput id="income" name="income" value={incomeValue} onValueChange={(v) => { setIncomeValue(v); setSaved(false); }} placeholder="0" className="field num text-right" />
       </div>
 
       <ul className="divide-y divide-line">

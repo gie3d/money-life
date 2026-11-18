@@ -12,5 +12,6 @@ next-env.d.ts
 
 # database files (docker bind mount)
 /data/
+/backups/
 /dist
 .gstack/

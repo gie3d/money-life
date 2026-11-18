@@ -70,7 +70,11 @@ export type PricePoint = { id: number; accountId: number; date: string; price: n
 /** Investments are tracked by trades; cash and saving by balance alone. */
 export const isInvestment = (a: { type: string }) => a.type === "investment";
 
-export type Category = { id: number; name: string; type: string; color: string };
+export type Category = {
+  id: number; name: string; type: string; color: string;
+  /** The share of the total value aimed for, 0 to 1; null for no target. */
+  target: number | null;
+};
 
 /** Swatches offered for a category (25); any hex colour is also accepted. Mid-tone, so they hold on white and on black. */
 export const CATEGORY_COLORS = [
@@ -255,6 +259,8 @@ export type Tier = "must" | "need" | "want";
 export type SpendingCategory = { id: number; name: string; position: number; archived: boolean; tier: Tier | null };
 
 /** What one everyday category came to in one month ("2026-11"). */
+/** What came in during one month (yyyy-mm). */
+export type MonthlyIncome = { month: string; amount: number };
 export type MonthlySpending = { categoryId: number; month: string; amount: number };
 
 /** A remark on one everyday category in one month ("2026-11"). */

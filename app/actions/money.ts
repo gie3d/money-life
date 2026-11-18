@@ -455,6 +455,16 @@ export async function setCategoryColor(categoryId: number, _: FormState, form: F
   revalidatePath("/", "layout");
 }
 
+/** Sets the share of the total value aimed for in a category, in percent; an empty box clears it. */
+export async function setCategoryTarget(categoryId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireEditable();
+  const raw = String(form.get("target") ?? "").replace(/[%\s]/g, "").replace(",", ".");
+  const target = raw === "" ? null : Number(raw);
+  if (target !== null && !(target >= 0 && target <= 100)) return { error: "A target is a share from 0 to 100%." };
+  await pool.query("UPDATE categories SET target_pct = $3 WHERE id = $1 AND user_id = $2", [categoryId, user.id, target === null ? null : Math.round(target * 100) / 100]);
+  revalidatePath("/", "layout");
+}
+
 /**
  * Brings every asset's current value up to date in one go, all on one date: a price per unit for an
  * investment, a balance for cash or saving. A field left as it was, or empty, changes nothing.

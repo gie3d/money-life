@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createCategory, deleteCategory, renameCategory, setCategoryColor } from "@/app/actions/money";
+import { createCategory, deleteCategory, renameCategory, setCategoryColor, setCategoryTarget } from "@/app/actions/money";
 import ColorPicker from "./ColorPicker";
 import ConfirmDelete from "./ConfirmDelete";
 import type { FormState } from "@/app/actions/auth";
@@ -21,19 +21,25 @@ export default function CategoryManager({
   currency: string;
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createCategory, undefined);
+  const targetSum = Math.round(categories.reduce((s, c) => s + (c.target ?? 0), 0) * 1000) / 10;
 
   return (
     <section className="card space-y-4 p-5 sm:p-6">
       <div>
         <h2 className="text-lg">Categories</h2>
         <p className="text-xs text-ink-3">
-          Your own groups for assets, like Thai stocks or Gold. Pick its type when you create it: Cash and Saving keep a balance; Investment keeps buys and sells and shows profit or loss. The type can&apos;t be changed afterwards. The colour is used in the charts.
+          Your own groups for assets, like Thai stocks or Gold. Pick its type when you create it: Cash and Saving keep a balance; Investment keeps buys and sells and shows profit or loss. The type can&apos;t be changed afterwards. The colour is used in the charts. A target is the share of your total value you aim to keep in it; the Allocation chart on Assets shows how far off each one is.
         </p>
       </div>
       {categories.length > 0 && (
         <div className="flex items-center justify-between border-b border-line pb-2">
           <p className="eyebrow">All categories</p>
-          <p className="num font-bold">{money(Object.values(totals).reduce((a, b) => a + b, 0), currency)}</p>
+          <p className="num flex items-center gap-3 font-bold">
+            {categories.some((c) => c.target !== null) && (
+              <span className={`text-xs font-semibold ${Math.abs(targetSum - 100) < 0.05 ? "text-ink-3" : "text-miss-text"}`}>Targets: {targetSum}%</span>
+            )}
+            {money(Object.values(totals).reduce((a, b) => a + b, 0), currency)}
+          </p>
         </div>
       )}
       <ul className="divide-y divide-line">
@@ -57,6 +63,8 @@ export default function CategoryManager({
 function CategoryRow({ category, used, total, currency }: { category: Category; used: number; total: number; currency: string }) {
   const [state, rename] = useActionState<FormState, FormData>(renameCategory.bind(null, category.id), undefined);
   const [colorState, recolor] = useActionState<FormState, FormData>(setCategoryColor.bind(null, category.id), undefined);
+  const [targetState, retarget] = useActionState<FormState, FormData>(setCategoryTarget.bind(null, category.id), undefined);
+  const targetText = category.target === null ? "" : String(Math.round(category.target * 10000) / 100);
   return (
     <li className="py-2">
       <div className="flex items-center gap-2">
@@ -74,9 +82,22 @@ function CategoryRow({ category, used, total, currency }: { category: Category; 
             className="w-full rounded-lg bg-transparent px-2 py-1.5 font-medium hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
           />
         </form>
-        <span className="rounded-lg bg-surface-2 px-2 py-1.5 text-sm text-ink-2">{labelOf(TYPES, category.type)}</span>
+        <span className="hidden rounded-lg bg-surface-2 px-2 py-1.5 text-sm text-ink-2 sm:inline">{labelOf(TYPES, category.type)}</span>
+        <form action={retarget} className="flex items-center">
+          <input
+            name="target"
+            key={targetText}
+            defaultValue={targetText}
+            inputMode="decimal"
+            placeholder="Target"
+            aria-label={`Target share for ${category.name}, in percent`}
+            onBlur={(e) => { if (e.currentTarget.value.trim() !== targetText) e.currentTarget.form?.requestSubmit(); }}
+            className="num w-16 rounded-lg bg-transparent px-2 py-1.5 text-right text-sm hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+          />
+          <span className="text-sm text-ink-3">%</span>
+        </form>
         <span className="hidden w-16 text-right text-xs text-ink-3 sm:block">{used} {used === 1 ? "asset" : "assets"}</span>
-        <span className="num w-32 text-right text-sm font-semibold">{money(total, currency)}</span>
+        <span className="num w-24 text-right text-sm font-semibold sm:w-32">{money(total, currency)}</span>
         {used === 0 ? (
           <ConfirmDelete
             action={deleteCategory.bind(null, category.id)}
@@ -91,7 +112,7 @@ function CategoryRow({ category, used, total, currency }: { category: Category; 
           <span className="size-8" title="Move its assets to another category before deleting" />
         )}
       </div>
-      {(state?.error ?? colorState?.error) && <p role="alert" className="px-2 text-xs font-medium text-miss-text">{state?.error ?? colorState?.error}</p>}
+      {(state?.error ?? colorState?.error ?? targetState?.error) && <p role="alert" className="px-2 text-xs font-medium text-miss-text">{state?.error ?? colorState?.error ?? targetState?.error}</p>}
     </li>
   );
 }

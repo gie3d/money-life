@@ -51,13 +51,14 @@ export default async function AccountsPage() {
 
   // Where the money sits: value per category or liquidity group, with what the investments in it cost.
   const counted = held.filter((h) => !h.account.archived);
-  const allocation = (members: typeof held, id: string, label: string, color: string): AllocationRow => {
+  const allocation = (members: typeof held, id: string, label: string, color: string, target: number | null = null): AllocationRow => {
     const inv = members.filter((h) => h.investment);
-    return { id, label, color, value: members.reduce((s, h) => s + h.value, 0), cost: inv.length > 0 ? inv.reduce((s, h) => s + h.cost, 0) : null };
+    return { id, label, color, target, value: members.reduce((s, h) => s + h.value, 0), cost: inv.length > 0 ? inv.reduce((s, h) => s + h.cost, 0) : null };
   };
+  // A category with a target stays on the list when empty: all of its target is still to fill.
   const byCategory = groups
-    .map((g) => allocation(counted.filter((h) => h.account.categoryId === g.category.id), String(g.category.id), g.category.name, g.category.color))
-    .filter((r) => r.value !== 0);
+    .map((g) => allocation(counted.filter((h) => h.account.categoryId === g.category.id), String(g.category.id), g.category.name, g.category.color, g.category.target))
+    .filter((r) => r.value !== 0 || (r.target ?? 0) > 0);
   const byLiquidity = LIQUIDITY
     .map((l) => allocation(counted.filter((h) => h.account.liquidity === l.id), l.id, l.label, colorFor(l.id, LIQUIDITY)))
     .filter((r) => r.value !== 0);

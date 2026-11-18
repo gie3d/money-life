@@ -4,13 +4,15 @@ import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
 import { signSwatch } from "@/components/Sign";
 import StaleNotice from "@/components/StaleNotice";
-import { listAccounts, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
+import { listAccounts, listBills, listCategories, listHobbySpending, listMonthlyIncome, listEntries, listGoals, listGoalVersions, listMonthlySpending, listPlanItems, listPlans, listPrices, listSpendingCategories, listTrades } from "@/lib/data";
+import { runway } from "@/lib/runway";
+import { savingsRate } from "@/lib/savings";
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoins } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
-import { forecast } from "@/lib/forecast";
+import { combined, forecast, layered, model, plannedProjection, projection, sumOf, volatility, type AssetPlan } from "@/lib/forecast";
 import { incomePayments, payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -31,21 +33,25 @@ const SPANS = [
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
-  const spanParam = (await searchParams).span;
+  const sp = await searchParams;
+  const spanParam = sp.span;
   const span = SPANS.find((o) => String(o.months) === spanParam)?.months ?? 12;
   const cur = user.currency;
 
-  const [accounts, entries, trades, prices, plans, planItems] = await Promise.all([
+  const [accounts, entries, trades, prices, plans, planItems, categories] = await Promise.all([
     listAccounts(user.id), listEntries(user.id), listTrades(user.id), listPrices(user.id),
-    listPlans(user.id), listPlanItems(user.id),
+    listPlans(user.id), listPlanItems(user.id), listCategories(user.id),
   ]);
   const [goals, goalVersions, { listsOf: goalLists }] = await Promise.all([listGoals(user.id), listGoalVersions(user.id), goalAssets(user.id)]);
+  const [spendingCats, monthlySpending, bills, monthlyIncome, hobbies] = await Promise.all([
+    listSpendingCategories(user.id), listMonthlySpending(user.id), listBills(user.id), listMonthlyIncome(user.id), listHobbySpending(user.id),
+  ]);
   const rows = holdings(accounts, entries, trades, prices);
   const today = new Date().toISOString().slice(0, 10);
 
   if (rows.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
         <div className="rounded-[28px] bg-gradient-to-br from-[var(--hero-a)] via-[var(--hero-b)] to-[var(--hero-c)] p-6 text-white sm:p-8">
           <p className="text-3xl" aria-hidden>🌱</p>
           <h1 className="mt-2 text-2xl text-white sm:text-3xl">Hi {user.name}, let&apos;s set you up</h1>
@@ -122,17 +128,80 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const activePlans = new Set(plans.filter((p) => !p.archived).map((p) => p.id));
   // The chosen span (a year by default) back as recorded and ahead on the trend; the trend itself is always the last 12 months.
   const activeItems = planItems.filter((i) => activePlans.has(i.planId));
-  const ahead = forecast(extendTo(netWorthSeries(lists, null, today), today), today, payments(activeItems), span, 12, incomePayments(activeItems));
+  // The trend is worked out per asset category (money saved, and investment growth compounding), so the
+  // stacked view's layers add up to the total line.
+  const catIds = [...new Set(rows.map((h) => h.account.categoryId))];
+  const layers = catIds
+    .map((id) => {
+      const idx = rows.map((h, i) => (h.account.categoryId === id ? i : -1)).filter((i) => i >= 0);
+      const c = categories.find((x) => x.id === id);
+      return {
+        id: String(id), name: c?.name ?? "Other", color: c?.color ?? "#8e8e93", rank: c ? categories.indexOf(c) : Infinity,
+        series: extendTo(netWorthSeries(idx.map((i) => lists[i]), null, today), today),
+        model: model(idx.map((i) => ({ entries: lists[i], investment: rows[i].investment })), today, 12),
+      };
+    })
+    .sort((a, b) => a.rank - b.rank);
+  // The likely range comes from how much all the investments together have swung month to month.
+  const trendModel = combined(layers.map((l) => l.model));
+  const vol = volatility(rows.map((h, i) => ({ entries: lists[i], investment: h.investment })), today, 12);
+
+  // "As your goals plan": each asset in a goal carries on at the growth and monthly amount its plan sets (the latest
+  // version of the first goal it is in), from what it is worth today; every other asset stays on its own trend.
+  const planOf = new Map<number, AssetPlan>();
+  for (const g of goals) {
+    const v = goalVersions.filter((x) => x.goalId === g.id).at(-1);
+    if (!v) continue;
+    const base = { contributionGrowth: v.contributionGrowth, startDate: v.startDate, targetDate: v.targetDate };
+    if (v.assets.length > 0) {
+      for (const a of v.assets) if (!planOf.has(a.accountId)) planOf.set(a.accountId, { ...base, rate: a.rate, monthly: a.monthly });
+    } else {
+      // A plan made as one pot: its rate for each asset, its monthly amount shared out by what each is worth now.
+      const ids = g.accountIds.filter((id) => !planOf.has(id) && rows.some((h) => h.account.id === id));
+      const worth = ids.map((id) => rows.find((h) => h.account.id === id)!.value);
+      const sum = worth.reduce((s, x) => s + x, 0);
+      ids.forEach((id, i) => planOf.set(id, { ...base, rate: v.expectedReturn, monthly: v.monthlyContribution * (sum > 0 ? worth[i] / sum : 1 / ids.length) }));
+    }
+  }
+  const canPlan = rows.some((h) => planOf.has(h.account.id));
+  const basis = canPlan && sp.basis === "goals" ? "goals" : "trend";
+  const assetProjection = (i: number) => {
+    const h = rows[i];
+    const plan = planOf.get(h.account.id);
+    return plan ? plannedProjection(h.value, h.investment, plan, today) : projection(model([{ entries: lists[i], investment: h.investment }], today, 12));
+  };
+  const projected = layers.map((l) => ({
+    ...l,
+    projection: basis === "goals"
+      ? sumOf(rows.map((h, i) => (String(h.account.categoryId) === l.id ? i : -1)).filter((i) => i >= 0).map(assetProjection))
+      : projection(l.model),
+  }));
+  const plannedCount = rows.filter((h) => planOf.has(h.account.id)).length;
+  const plannedMonthly = [...planOf.entries()].filter(([id]) => rows.some((h) => h.account.id === id)).reduce((s, [, p]) => s + (p.targetDate >= today ? p.monthly : 0), 0);
+
+  const ahead = forecast(history, today, payments(activeItems), span, 12, incomePayments(activeItems), { parts: projected.map((l) => l.projection), volatility: vol });
+  const layerRows = layered(ahead.points, projected, today);
+  const layerInfo = layers.map(({ id, name, color }) => ({ id, name, color }));
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
   const incomeDue = ahead.income.reduce((s, p) => s + p.amount, 0);
   const hasPlans = planDue > 0 || incomeDue > 0;
   // Costs and income together, in date order, for the list under "More detail".
   const planned = [...ahead.payments.map((p) => ({ ...p, income: false })), ...ahead.income.map((p) => ({ ...p, income: true }))].sort((a, b) => a.date.localeCompare(b.date));
 
+  // How long the money you can reach within days would last on your essentials, if nothing came in.
+  // How much of what comes in you keep, over the last 6 whole months with income recorded.
+  const keep = savingsRate(today, monthlyIncome, monthlySpending, hobbies, bills, 6);
+  const run = runway(rows.map((h) => ({ liquidity: h.account.liquidity, value: h.value })), spendingCats, monthlySpending, bills, today);
+
+  // The Home address for a span and what the forecast follows (a year on the recent trend needs neither).
+  const href = (months: number, b: string) => {
+    const q = [months !== 12 && `span=${months}`, b === "goals" && "basis=goals"].filter(Boolean).join("&");
+    return q ? `/?${q}` : "/";
+  };
   const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <StaleNotice items={stale} />
 
       {/* How much do I have? */}
@@ -162,28 +231,54 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             <h2 className="flex items-center gap-2 text-lg">
               Where it&apos;s heading
               <Info>
-                The trend carries on the average monthly change in your total value over the last 12 months (or since your first record), money added or taken out included.
+                The trend splits the last 12 months (or the time since your first record) in two: the money you put in or took out, averaged per month, and what your investments earned on their own. Both carry on: the money you put in adds up month by month, and your investments keep growing at their recent rate, compounding. A large one-off deposit therefore counts as money put in, not as growth.
+                {canPlan && " Switch to As your goals plan to carry each asset in a goal on at the growth and monthly amount its plan sets, from what it is worth today (amounts stop at the goal's date); other assets stay on their trend."}
+                {ahead.end.low !== null && " The shaded band is a likely range: how far your investments could drift either way if the coming months swing as much as the last 12 did. About two times in three the value should land inside it; the money you put in is taken as certain."}
                 {hasPlans && " The dotted line also takes off the costs in your plans, and adds their income, as they fall due."} It is a forecast only: your assets are not changed.
               </Info>
             </h2>
             <p className="text-xs text-ink-3">
-              {ahead.basisMonths >= 1 ? <>Going <span className={`font-semibold ${tone(ahead.monthly)}`}>{signedMoney(ahead.monthly, cur)} a month</span> lately</> : "Not enough history for a trend yet"}
+              {basis === "goals" ? (
+                <>
+                  Following your goals for {plannedCount} {plannedCount === 1 ? "asset" : "assets"}
+                  {plannedMonthly > 0 && <>, putting in <span className="font-semibold text-go-text">{signedMoney(plannedMonthly, cur)} a month</span> as planned</>}
+                  {plannedCount < rows.length && "; the rest on their trend"}
+                </>
+              ) : ahead.basisMonths >= 1 ? (
+                <>
+                  Putting in <span className={`font-semibold ${tone(trendModel.saved)}`}>{signedMoney(trendModel.saved, cur)} a month</span>
+                  {trendModel.invested > 0 && <>, investments growing <span className={`font-semibold ${tone(trendModel.rate)}`}>{pct((1 + trendModel.rate) ** 12 - 1)} a year</span></>}
+                </>
+              ) : "Not enough history for a trend yet"}
             </p>
           </div>
           <div className="text-right">
             <p className="eyebrow">By {day(ahead.end.date)}{hasPlans && ", after plans"}</p>
             <p className={`num text-2xl font-extrabold ${forecastEnd < 0 ? "text-miss-text" : ""}`}>{money(forecastEnd, cur)}</p>
+            {ahead.end.low !== null && ahead.end.high !== null && (
+              <p className="num text-xs text-ink-3">likely {money(ahead.end.low, cur)} – {money(ahead.end.high, cur)}</p>
+            )}
           </div>
         </div>
         <nav aria-label="How far to look" className="mb-3 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
           {SPANS.map((o) => (
-            <Link key={o.months} href={o.months === 12 ? "/" : `/?span=${o.months}`} scroll={false} aria-current={o.months === span ? "true" : undefined}
+            <Link key={o.months} href={href(o.months, basis)} scroll={false} aria-current={o.months === span ? "true" : undefined}
               className={`rounded-full px-3 py-1 ${o.months === span ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
               {o.label}
             </Link>
           ))}
         </nav>
-        <ForecastChart points={ahead.points} today={today} currency={cur} withPlans={hasPlans} />
+        {canPlan && (
+          <nav aria-label="What the forecast follows" className="mb-3 ml-2 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
+            {([["trend", "Recent trend"], ["goals", "As your goals plan"]] as const).map(([b, label]) => (
+              <Link key={b} href={href(span, b)} scroll={false} aria-current={b === basis ? "true" : undefined}
+                className={`rounded-full px-3 py-1 ${b === basis ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        )}
+        <ForecastChart withBand={ahead.end.low !== null} points={ahead.points} layerRows={layerRows} layers={layerInfo} today={today} currency={cur} withPlans={hasPlans} />
         {hasPlans && (
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-semibold text-ink-2">More detail</summary>
@@ -206,6 +301,61 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             )}
           </details>
         )}
+      </section>
+
+      {/* Could I cope without income? */}
+      <section className="card p-5 sm:p-6">
+        <h2 className="flex items-center gap-2 text-lg">
+          Your safety net
+          <Info label="About how long it would last">
+            If nothing came in, how many months the assets you can turn into cash within days ({money(run.liquid, cur)}) would cover.
+            Essentials are your Must and Need spending (and categories not sorted yet), averaged over the last {run.basisMonths || 6} whole months you recorded, plus your bills.
+            Investments that take months or years to sell, and retirement money, are left out.
+          </Info>
+        </h2>
+        <p className="mt-2 text-sm text-ink-2">How long it would last if nothing came in</p>
+        {run.essentialMonths === null ? (
+          <p className="mt-1 text-sm text-ink-3">
+            Record your <Link href="/spending" className="font-semibold text-brand-dk">everyday spending</Link> or add your <Link href="/bills" className="font-semibold text-brand-dk">bills</Link> to see how long your cash would last.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p className="eyebrow">On essentials</p>
+              <p className={`num text-2xl font-extrabold ${run.essentialMonths < 3 ? "text-miss-text" : ""}`}>{duration(run.essentialMonths)}</p>
+              <p className="num text-xs text-ink-3">{money(run.essentials, cur)} a month</p>
+            </div>
+            {run.usualMonths !== null && run.usual > run.essentials && (
+              <div>
+                <p className="eyebrow">At your usual spending</p>
+                <p className="num text-lg font-semibold">{duration(run.usualMonths)}</p>
+                <p className="num text-xs text-ink-3">{money(run.usual, cur)} a month</p>
+              </div>
+            )}
+            {run.essentialMonths < 3 && <p className="text-sm text-ink-3 sm:ml-auto sm:max-w-56">A common rule of thumb is to keep 3–6 months of essentials within easy reach.</p>}
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-2 border-t border-line pt-4">
+          <div>
+            <p className="eyebrow flex items-center gap-1.5">
+              Savings rate
+              <Info label="About the savings rate">
+                What you kept of your income over the last {keep.months.length || 6} whole months you recorded it: income less everyday spending, hobbies and bills (at their monthly cost), over income. Type each month&apos;s income on the Everyday spending page.
+              </Info>
+            </p>
+            {keep.rate === null ? (
+              <p className="text-sm text-ink-3"><Link href="/spending" className="font-semibold text-brand-dk">Add your income</Link> next to a month&apos;s spending to see it.</p>
+            ) : (
+              <p className={`num text-2xl font-extrabold ${keep.rate < 0 ? "text-miss-text" : ""}`}>{Math.round(keep.rate * 100)}%</p>
+            )}
+          </div>
+          {keep.perMonth !== null && (
+            <p className="num text-xs text-ink-3">
+              {signedMoney(keep.perMonth, cur)} a month on average, over {keep.months.length} {keep.months.length === 1 ? "month" : "months"}
+              {ahead.basisMonths >= 1 && <> · your assets took in {signedMoney(trendModel.saved, cur)} a month</>}
+            </p>
+          )}
+        </div>
       </section>
 
       {/* Am I on track? */}
@@ -264,6 +414,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       )}
     </div>
   );
+}
+
+/** "4.2 months", "under a month", or "2.5 years" past two years. */
+function duration(months: number) {
+  if (months < 1) return "Under a month";
+  if (months >= 24) return `${(months / 12).toFixed(1)} years`;
+  return `${months.toFixed(1)} months`;
 }
 
 function Stat({ label, value, cls = "" }: { label: string; value: string; cls?: string }) {

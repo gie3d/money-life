@@ -9,24 +9,29 @@ REMOTE   ?= ~/projects/money-life
 # One shared connection, so the SSH password is asked once for scp and ssh together.
 SSH_OPTS ?= -o ControlMaster=auto -o ControlPath=/tmp/money-life-ssh-%r@%h:%p -o ControlPersist=60
 
-.PHONY: package image deploy clean
+.PHONY: package image deploy clean backup-pull
 
 package: image
 	rm -rf $(DIST)
 	mkdir -p $(DIST)
 	docker save $(IMAGE) | gzip > $(DIST)/money-life-image.tar.gz
-	cp deploy/docker-compose.yml deploy/.env.example deploy/README.txt $(DIST)/
+	cp deploy/docker-compose.yml deploy/.env.example deploy/README.txt deploy/backup.sh deploy/restore.sh $(DIST)/
 	@echo
 	@echo "Package ready: $(DIST)  ($(PLATFORM))"
 	@echo "Copy it to the Umbrel, then follow $(DIST)/README.txt"
 
 # Build, upload to the Umbrel, load the image there and (re)start. Needs a .env in $(REMOTE) on first run.
 deploy: package
-	scp $(SSH_OPTS) $(DIST)/.env.example $(DIST)/docker-compose.yml $(DIST)/money-life-image.tar.gz $(DIST)/README.txt $(HOST):$(REMOTE)/
+	scp $(SSH_OPTS) $(DIST)/.env.example $(DIST)/docker-compose.yml $(DIST)/money-life-image.tar.gz $(DIST)/README.txt $(DIST)/backup.sh $(DIST)/restore.sh $(HOST):$(REMOTE)/
 	ssh -t $(SSH_OPTS) $(HOST) 'cd $(REMOTE) && sudo docker load < money-life-image.tar.gz && sudo docker compose up -d'
 
 image:
 	docker buildx build --platform $(PLATFORM) --target prod -t $(IMAGE) --load .
+
+# Copy the Umbrel's backups to this machine (into ./backups), so a failed disk there doesn't take them too.
+backup-pull:
+	mkdir -p backups
+	rsync -av -e "ssh $(SSH_OPTS)" $(HOST):$(REMOTE)/data/backups/ backups/
 
 clean:
 	rm -rf dist
