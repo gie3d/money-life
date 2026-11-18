@@ -12,7 +12,7 @@ import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoin
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
-import { combined, forecast, layered, model, volatility } from "@/lib/forecast";
+import { combined, forecast, layered, model, plannedProjection, projection, sumOf, volatility, type AssetPlan } from "@/lib/forecast";
 import { incomePayments, payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -33,7 +33,8 @@ const SPANS = [
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
-  const spanParam = (await searchParams).span;
+  const sp = await searchParams;
+  const spanParam = sp.span;
   const span = SPANS.find((o) => String(o.months) === spanParam)?.months ?? 12;
   const cur = user.currency;
 
@@ -142,9 +143,44 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     })
     .sort((a, b) => a.rank - b.rank);
   // The likely range comes from how much all the investments together have swung month to month.
-  const trendModel = { ...combined(layers.map((l) => l.model)), volatility: volatility(rows.map((h, i) => ({ entries: lists[i], investment: h.investment })), today, 12) };
-  const ahead = forecast(history, today, payments(activeItems), span, 12, incomePayments(activeItems), trendModel);
-  const layerRows = layered(ahead.points, layers, today);
+  const trendModel = combined(layers.map((l) => l.model));
+  const vol = volatility(rows.map((h, i) => ({ entries: lists[i], investment: h.investment })), today, 12);
+
+  // "As your goals plan": each asset in a goal carries on at the growth and monthly amount its plan sets (the latest
+  // version of the first goal it is in), from what it is worth today; every other asset stays on its own trend.
+  const planOf = new Map<number, AssetPlan>();
+  for (const g of goals) {
+    const v = goalVersions.filter((x) => x.goalId === g.id).at(-1);
+    if (!v) continue;
+    const base = { contributionGrowth: v.contributionGrowth, startDate: v.startDate, targetDate: v.targetDate };
+    if (v.assets.length > 0) {
+      for (const a of v.assets) if (!planOf.has(a.accountId)) planOf.set(a.accountId, { ...base, rate: a.rate, monthly: a.monthly });
+    } else {
+      // A plan made as one pot: its rate for each asset, its monthly amount shared out by what each is worth now.
+      const ids = g.accountIds.filter((id) => !planOf.has(id) && rows.some((h) => h.account.id === id));
+      const worth = ids.map((id) => rows.find((h) => h.account.id === id)!.value);
+      const sum = worth.reduce((s, x) => s + x, 0);
+      ids.forEach((id, i) => planOf.set(id, { ...base, rate: v.expectedReturn, monthly: v.monthlyContribution * (sum > 0 ? worth[i] / sum : 1 / ids.length) }));
+    }
+  }
+  const canPlan = rows.some((h) => planOf.has(h.account.id));
+  const basis = canPlan && sp.basis === "goals" ? "goals" : "trend";
+  const assetProjection = (i: number) => {
+    const h = rows[i];
+    const plan = planOf.get(h.account.id);
+    return plan ? plannedProjection(h.value, h.investment, plan, today) : projection(model([{ entries: lists[i], investment: h.investment }], today, 12));
+  };
+  const projected = layers.map((l) => ({
+    ...l,
+    projection: basis === "goals"
+      ? sumOf(rows.map((h, i) => (String(h.account.categoryId) === l.id ? i : -1)).filter((i) => i >= 0).map(assetProjection))
+      : projection(l.model),
+  }));
+  const plannedCount = rows.filter((h) => planOf.has(h.account.id)).length;
+  const plannedMonthly = [...planOf.entries()].filter(([id]) => rows.some((h) => h.account.id === id)).reduce((s, [, p]) => s + (p.targetDate >= today ? p.monthly : 0), 0);
+
+  const ahead = forecast(history, today, payments(activeItems), span, 12, incomePayments(activeItems), { parts: projected.map((l) => l.projection), volatility: vol });
+  const layerRows = layered(ahead.points, projected, today);
   const layerInfo = layers.map(({ id, name, color }) => ({ id, name, color }));
   const planDue = ahead.payments.reduce((s, p) => s + p.amount, 0);
   const incomeDue = ahead.income.reduce((s, p) => s + p.amount, 0);
@@ -157,6 +193,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const keep = savingsRate(today, monthlyIncome, monthlySpending, hobbies, bills, 6);
   const run = runway(rows.map((h) => ({ liquidity: h.account.liquidity, value: h.value })), spendingCats, monthlySpending, bills, today);
 
+  // The Home address for a span and what the forecast follows (a year on the recent trend needs neither).
+  const href = (months: number, b: string) => {
+    const q = [months !== 12 && `span=${months}`, b === "goals" && "basis=goals"].filter(Boolean).join("&");
+    return q ? `/?${q}` : "/";
+  };
   const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
 
   return (
@@ -191,12 +232,19 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               Where it&apos;s heading
               <Info>
                 The trend splits the last 12 months (or the time since your first record) in two: the money you put in or took out, averaged per month, and what your investments earned on their own. Both carry on: the money you put in adds up month by month, and your investments keep growing at their recent rate, compounding. A large one-off deposit therefore counts as money put in, not as growth.
+                {canPlan && " Switch to As your goals plan to carry each asset in a goal on at the growth and monthly amount its plan sets, from what it is worth today (amounts stop at the goal's date); other assets stay on their trend."}
                 {ahead.end.low !== null && " The shaded band is a likely range: how far your investments could drift either way if the coming months swing as much as the last 12 did. About two times in three the value should land inside it; the money you put in is taken as certain."}
                 {hasPlans && " The dotted line also takes off the costs in your plans, and adds their income, as they fall due."} It is a forecast only: your assets are not changed.
               </Info>
             </h2>
             <p className="text-xs text-ink-3">
-              {ahead.basisMonths >= 1 ? (
+              {basis === "goals" ? (
+                <>
+                  Following your goals for {plannedCount} {plannedCount === 1 ? "asset" : "assets"}
+                  {plannedMonthly > 0 && <>, putting in <span className="font-semibold text-go-text">{signedMoney(plannedMonthly, cur)} a month</span> as planned</>}
+                  {plannedCount < rows.length && "; the rest on their trend"}
+                </>
+              ) : ahead.basisMonths >= 1 ? (
                 <>
                   Putting in <span className={`font-semibold ${tone(trendModel.saved)}`}>{signedMoney(trendModel.saved, cur)} a month</span>
                   {trendModel.invested > 0 && <>, investments growing <span className={`font-semibold ${tone(trendModel.rate)}`}>{pct((1 + trendModel.rate) ** 12 - 1)} a year</span></>}
@@ -214,12 +262,22 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </div>
         <nav aria-label="How far to look" className="mb-3 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
           {SPANS.map((o) => (
-            <Link key={o.months} href={o.months === 12 ? "/" : `/?span=${o.months}`} scroll={false} aria-current={o.months === span ? "true" : undefined}
+            <Link key={o.months} href={href(o.months, basis)} scroll={false} aria-current={o.months === span ? "true" : undefined}
               className={`rounded-full px-3 py-1 ${o.months === span ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
               {o.label}
             </Link>
           ))}
         </nav>
+        {canPlan && (
+          <nav aria-label="What the forecast follows" className="mb-3 ml-2 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
+            {([["trend", "Recent trend"], ["goals", "As your goals plan"]] as const).map(([b, label]) => (
+              <Link key={b} href={href(span, b)} scroll={false} aria-current={b === basis ? "true" : undefined}
+                className={`rounded-full px-3 py-1 ${b === basis ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink"}`}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        )}
         <ForecastChart withBand={ahead.end.low !== null} points={ahead.points} layerRows={layerRows} layers={layerInfo} today={today} currency={cur} withPlans={hasPlans} />
         {hasPlans && (
           <details className="mt-3 text-sm">

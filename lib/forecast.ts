@@ -31,8 +31,6 @@ export type Forecast = {
   payments: Payment[];
   /** Plan income falling from today to the end of the forecast, oldest first. */
   income: Payment[];
-  /** How the trend was split: money saved a month and investment growth, when a model was given. */
-  model: Model | null;
   /** Value at the end of the forecast, on the trend and after plan payments. */
   end: { date: string; trend: number; afterPlans: number; low: number | null; high: number | null };
 };
@@ -53,7 +51,7 @@ function valueOn(series: Point[], date: string): number {
  * `series` is the total value over time, ending today. The history shown is the last `months` months too, one
  * point at the end of each month, then today.
  */
-export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12, planIncome: Payment[] = [], model: Model | null = null): Forecast {
+export function forecast(series: Point[], today: string, planPayments: Payment[], months = 6, lookback = 12, planIncome: Payment[] = [], trend: Trend | null = null): Forecast {
   const now = valueOn(series, today);
   const first = series[0]?.date ?? today;
   const back = addMonths(today, -lookback);
@@ -77,18 +75,18 @@ export function forecast(series: Point[], today: string, planPayments: Payment[]
   }
   // Today joins the lines; payments due today have not left the recorded value yet.
   const todayAfter = now - dueBy(today) + incomeBy(today);
-  const band = model?.volatility != null;
+  const band = trend?.volatility != null;
   points.push({ date: today, actual: now, trend: now, afterPlans: todayAfter, low: band ? todayAfter : null, high: band ? todayAfter : null });
   for (let k = 1; k <= months; k++) {
     const date = addMonths(today, k);
-    const trend = model ? projectAll(model, k) : now + monthly * k;
-    const afterPlans = trend - dueBy(date) + incomeBy(date);
-    const spread = model && band ? spreadAt(model, k) : null;
-    points.push({ date, actual: null, trend, afterPlans, low: spread && afterPlans - spread.down, high: spread && afterPlans + spread.up });
+    const line = trend ? trend.parts.reduce((s, p) => s + p.at(k), 0) : now + monthly * k;
+    const afterPlans = line - dueBy(date) + incomeBy(date);
+    const spread = trend && band ? spreadAt(trend, k) : null;
+    points.push({ date, actual: null, trend: line, afterPlans, low: spread && afterPlans - spread.down, high: spread && afterPlans + spread.up });
   }
 
   const last = points[points.length - 1];
-  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, model, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans!, low: last.low, high: last.high } };
+  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans!, low: last.low, high: last.high } };
 }
 
 /**
@@ -146,9 +144,9 @@ export function model(assets: ModelAsset[], today: string, lookback = 12): Model
  * About two times in three the value should land inside it, if the coming months swing as the past ones did.
  * Money put in is taken as certain, so only investments widen the range.
  */
-function spreadAt(m: Model & { parts?: Model[] }, k: number) {
-  const invested = (m.parts ?? [m]).reduce((s, p) => s + p.invested * (1 + p.rate) ** k, 0);
-  const w = (m.volatility ?? 0) * Math.sqrt(k);
+function spreadAt(t: Trend, k: number) {
+  const invested = t.parts.reduce((s, p) => s + p.investedAt(k), 0);
+  const w = (t.volatility ?? 0) * Math.sqrt(k);
   return { down: invested * (1 - Math.exp(-w)), up: invested * (Math.exp(w) - 1) };
 }
 
@@ -193,15 +191,50 @@ export function combined(models: Model[]): Model & { parts: Model[] } {
 export type LayerRow = { date: string } & Record<string, number | string>;
 
 /** The forecast's dates split into layers (asset categories, say), which add up to the total trend. */
-export function layered(points: ForecastPoint[], layers: { id: string; series: Point[]; model: Model }[], today: string): LayerRow[] {
+export function layered(points: ForecastPoint[], layers: { id: string; series: Point[]; projection: Projection }[], today: string): LayerRow[] {
   let k = 0;
   return points.map((p) => {
     const row: LayerRow = { date: p.date };
     if (p.date > today) k++;
-    for (const l of layers) row[l.id] = p.date <= today ? valueOn(l.series, p.date) : project(l.model, k);
+    for (const l of layers) row[l.id] = p.date <= today ? valueOn(l.series, p.date) : l.projection.at(k);
     return row;
   });
 }
 
-/** A combined model projects as the sum of its parts, so the layers and the total always agree. */
-const projectAll = (m: Model & { parts?: Model[] }, k: number) => (m.parts ? m.parts.reduce((s, p) => s + project(p, k), 0) : project(m, k));
+/** Where some assets are headed: their value `k` months from today, and the part of it in investments (which swing). */
+export type Projection = { at: (k: number) => number; investedAt: (k: number) => number };
+
+/** The forecast line: its parts added up (so layers and total agree), and how much investments swing, for the range. */
+export type Trend = { parts: Projection[]; volatility?: number | null };
+
+/** A model as a projection. */
+export const projection = (m: Model): Projection => ({ at: (k) => project(m, k), investedAt: (k) => m.invested * (1 + m.rate) ** k });
+
+/** Several projections as one. */
+export const sumOf = (parts: Projection[]): Projection => ({
+  at: (k) => parts.reduce((s, p) => s + p.at(k), 0),
+  investedAt: (k) => parts.reduce((s, p) => s + p.investedAt(k), 0),
+});
+
+/** What a goal plans for one asset: its expected yearly growth and monthly amount, rising once a year from the plan's start, paid in until its target date. */
+export type AssetPlan = { rate: number; monthly: number; contributionGrowth: number; startDate: string; targetDate: string };
+
+/**
+ * One asset carried on as its goal plans, from what it is worth today: it grows at the planned rate and gets the
+ * planned monthly amount until the goal's target date, then keeps growing with nothing more paid in.
+ */
+export function plannedProjection(now: number, investment: boolean, plan: AssetPlan, today: string): Projection {
+  const r = (1 + plan.rate) ** (1 / 12) - 1;
+  const values = [now];
+  const at = (k: number) => {
+    for (let j = values.length; j <= k; j++) {
+      const date = addMonths(today, j);
+      // The plan's own month count: its monthly amount rises once each full year from its start.
+      const kPlan = (+date.slice(0, 4) - +plan.startDate.slice(0, 4)) * 12 + (+date.slice(5, 7) - +plan.startDate.slice(5, 7));
+      const pay = date <= plan.targetDate ? plan.monthly * (1 + plan.contributionGrowth) ** Math.max(0, Math.floor((kPlan - 1) / 12)) : 0;
+      values.push(values[j - 1] * (1 + r) + pay);
+    }
+    return values[k];
+  };
+  return { at, investedAt: (k) => (investment ? at(k) : 0) };
+}

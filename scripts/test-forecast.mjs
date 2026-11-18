@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-forecast.mjs
 import assert from "node:assert/strict";
-import { combined, forecast, layered, model, project, volatility } from "../lib/forecast.ts";
+import { forecast, layered, model, plannedProjection, project, projection, volatility } from "../lib/forecast.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} !~ ${b}`);
 const pt = (date, value) => ({ date, value, cost: 0 });
@@ -64,11 +64,10 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   // Under a month of history: no trend.
   near(model([{ entries: [e("2026-11-01", 5)], investment: false }], T).saved, 0);
   // Layers add up to the total trend, and the forecast uses the model.
-  const both = combined([cash, inv]);
   const total = [pt("2025-11-08", 11_000), pt(T, 24_000)];
-  const fm = forecast(total, T, [], 12, 12, [], both);
+  const fm = forecast(total, T, [], 12, 12, [], { parts: [projection(cash), projection(inv)] });
   near(fm.end.trend, 25_000 + 12_100);
-  const rows = layered(fm.points, [{ id: "a", series: [pt("2025-11-08", 1_000), pt(T, 13_000)], model: cash }, { id: "b", series: [pt("2025-11-08", 10_000), pt(T, 11_000)], model: inv }], T);
+  const rows = layered(fm.points, [{ id: "a", series: [pt("2025-11-08", 1_000), pt(T, 13_000)], projection: projection(cash) }, { id: "b", series: [pt("2025-11-08", 10_000), pt(T, 11_000)], projection: projection(inv) }], T);
   rows.forEach((r, i) => { if (fm.points[i].trend !== null) near(r.a + r.b, fm.points[i].trend); });
 }
 
@@ -89,7 +88,7 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   assert.equal(volatility([{ entries: [e("2026-09-08", 1), e(T, 2)], investment: true }], T), null);
   near(volatility([{ entries: steady, investment: true }, { entries: [e("2025-11-08", 0), e("2026-05-08", 50_000), e(T, 9)], investment: false }], T), 0);
   // The band sits around the after-plans line, widens over time, and is lopsided (more room up than down).
-  const m = { ...model([{ entries: choppy, investment: true }], T), volatility: vol };
+  const m = { parts: [projection(model([{ entries: choppy, investment: true }], T))], volatility: vol };
   const f = forecast([pt("2025-11-08", 1000), pt(T, choppy.at(-1).value)], T, [pay("2027-01-01", 100)], 12, 12, [], m);
   const at = (d) => f.points.find((p) => p.date === d);
   assert.equal(at("2026-10-31").low, null);
@@ -100,6 +99,23 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   assert.ok(k12.high - k12.afterPlans > k12.afterPlans - k12.low);
   near(f.end.low, k12.low);
   // Without a volatility there is no band.
-  assert.equal(forecast([pt(T, 1)], T, [], 6, 12, [], model([], T)).end.low, null);
+  assert.equal(forecast([pt(T, 1)], T, [], 6, 12, [], { parts: [projection(model([], T))] }).end.low, null);
+}
+
+// Carrying an asset on as its goal plans.
+{
+  const T = "2026-11-08";
+  // 6% a year and 1,000 a month: after a year, 10,000 × 1.06 plus twelve payments grown at the monthly rate.
+  const r = 1.06 ** (1 / 12) - 1;
+  const p = plannedProjection(10_000, true, { rate: 0.06, monthly: 1_000, contributionGrowth: 0, startDate: "2026-01-01", targetDate: "2040-01-01" }, T);
+  near(p.at(0), 10_000); near(p.at(1), 10_000 * (1 + r) + 1_000);
+  near(p.at(12), 10_000 * 1.06 + 1_000 * ((1 + r) ** 12 - 1) / r);
+  near(p.investedAt(12), p.at(12));
+  // The monthly amount rises 10% each full year from the plan's start (Jan 2026): Jan 2027 is month 12, still year one; Feb 2027 is the first raised one.
+  const g = plannedProjection(0, false, { rate: 0, monthly: 100, contributionGrowth: 0.1, startDate: "2026-01-01", targetDate: "2040-01-01" }, T);
+  near(g.at(2), 200); near(g.at(3) - g.at(2), 110); near(g.investedAt(3), 0);
+  // Payments stop after the target date; growth carries on.
+  const end = plannedProjection(1_000, true, { rate: 0, monthly: 100, contributionGrowth: 0, startDate: "2026-01-01", targetDate: "2027-01-08" }, T);
+  near(end.at(2), 1_200); near(end.at(6), 1_200);
 }
 console.log("forecast ok");

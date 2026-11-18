@@ -20,6 +20,9 @@ in `package.json` to match.
   long at your usual spending. Spending is averaged over the last 6 whole months you recorded. Under 3 months shows
   in red. Under it, your **savings rate**: what you kept of your income over the last 6 whole months you recorded
   it, after everyday spending, hobbies and bills.
+- With a goal set, a **Recent trend / As your goals plan** switch. As your goals plan carries each asset in a goal on
+  at the growth and monthly amount its plan sets, from what it is worth today (the monthly amount rises as the plan
+  says and stops at the goal's date); assets in no goal stay on their trend. The switch is kept in the address with the span.
 - A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
   trend, adding up to the total.
 
