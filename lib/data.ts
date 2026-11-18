@@ -59,8 +59,8 @@ export async function listEntries(userId: number, accountId?: number, fiat = fal
 }
 
 export async function listCategories(userId: number): Promise<Category[]> {
-  const { rows } = await pool.query("SELECT id, name, type, color FROM categories WHERE user_id = $1 ORDER BY lower(name), id", [userId]);
-  return rows.map((r) => ({ id: Number(r.id), name: r.name as string, type: r.type as string, color: r.color as string }));
+  const { rows } = await pool.query("SELECT id, name, type, color, target_pct FROM categories WHERE user_id = $1 ORDER BY lower(name), id", [userId]);
+  return rows.map((r) => ({ id: Number(r.id), name: r.name as string, type: r.type as string, color: r.color as string, target: r.target_pct === null ? null : Number(r.target_pct) / 100 }));
 }
 
 const toTrade = (r: Record<string, unknown>): Trade => ({

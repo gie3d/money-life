@@ -23,6 +23,13 @@ in `package.json` to match.
 - A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
   trend, adding up to the total.
 
+### Assets
+- Give each asset category a **target**: the share of your total value you aim to keep in it, set beside the category
+  under Settings → Categories (which also shows what the targets add up to). On Assets, the Allocation chart marks
+  each target on its bar and says how far off it is: on target (within 2 points), or so many points over or under,
+  with the amount to add or take out to land on it. A category with a target but nothing in it yet still shows.
+  On a phone, the Categories list leaves out each category's type to make room.
+
 ### Spending
 - Type the month's **income** at the top of the month's form on Everyday spending (Fill empty from last month fills it
   too). A new **Saved** tile shows what you kept that month, after everyday spending, hobbies bought that month and
