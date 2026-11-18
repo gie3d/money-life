@@ -4,7 +4,8 @@ import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
 import { signSwatch } from "@/components/Sign";
 import StaleNotice from "@/components/StaleNotice";
-import { listAccounts, listCategories, listEntries, listGoals, listGoalVersions, listPlanItems, listPlans, listPrices, listTrades } from "@/lib/data";
+import { listAccounts, listBills, listCategories, listEntries, listGoals, listGoalVersions, listMonthlySpending, listPlanItems, listPlans, listPrices, listSpendingCategories, listTrades } from "@/lib/data";
+import { runway } from "@/lib/runway";
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoins } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
@@ -40,6 +41,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listPlans(user.id), listPlanItems(user.id), listCategories(user.id),
   ]);
   const [goals, goalVersions, { listsOf: goalLists }] = await Promise.all([listGoals(user.id), listGoalVersions(user.id), goalAssets(user.id)]);
+  const [spendingCats, monthlySpending, bills] = await Promise.all([listSpendingCategories(user.id), listMonthlySpending(user.id), listBills(user.id)]);
   const rows = holdings(accounts, entries, trades, prices);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -147,6 +149,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   // Costs and income together, in date order, for the list under "More detail".
   const planned = [...ahead.payments.map((p) => ({ ...p, income: false })), ...ahead.income.map((p) => ({ ...p, income: true }))].sort((a, b) => a.date.localeCompare(b.date));
 
+  // How long the money you can reach within days would last on your essentials, if nothing came in.
+  const run = runway(rows.map((h) => ({ liquidity: h.account.liquidity, value: h.value })), spendingCats, monthlySpending, bills, today);
+
   const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
 
   return (
@@ -235,6 +240,39 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         )}
       </section>
 
+      {/* Could I cope without income? */}
+      <section className="card p-5 sm:p-6">
+        <h2 className="flex items-center gap-2 text-lg">
+          How long it would last
+          <Info>
+            If nothing came in, how many months the assets you can turn into cash within days ({money(run.liquid, cur)}) would cover.
+            Essentials are your Must and Need spending (and categories not sorted yet), averaged over the last {run.basisMonths || 6} whole months you recorded, plus your bills.
+            Investments that take months or years to sell, and retirement money, are left out.
+          </Info>
+        </h2>
+        {run.essentialMonths === null ? (
+          <p className="mt-1 text-sm text-ink-3">
+            Record your <Link href="/spending" className="font-semibold text-brand-dk">everyday spending</Link> or add your <Link href="/bills" className="font-semibold text-brand-dk">bills</Link> to see how long your cash would last.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p className="eyebrow">On essentials</p>
+              <p className={`num text-2xl font-extrabold ${run.essentialMonths < 3 ? "text-miss-text" : ""}`}>{duration(run.essentialMonths)}</p>
+              <p className="num text-xs text-ink-3">{money(run.essentials, cur)} a month</p>
+            </div>
+            {run.usualMonths !== null && run.usual > run.essentials && (
+              <div>
+                <p className="eyebrow">At your usual spending</p>
+                <p className="num text-lg font-semibold">{duration(run.usualMonths)}</p>
+                <p className="num text-xs text-ink-3">{money(run.usual, cur)} a month</p>
+              </div>
+            )}
+            {run.essentialMonths < 3 && <p className="text-sm text-ink-3 sm:ml-auto sm:max-w-56">A common rule of thumb is to keep 3–6 months of essentials within easy reach.</p>}
+          </div>
+        )}
+      </section>
+
       {/* Am I on track? */}
       {goalCards.length > 0 ? (
         <section className="card p-5 sm:p-6">
@@ -291,6 +329,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       )}
     </div>
   );
+}
+
+/** "4.2 months", "under a month", or "2.5 years" past two years. */
+function duration(months: number) {
+  if (months < 1) return "Under a month";
+  if (months >= 24) return `${(months / 12).toFixed(1)} years`;
+  return `${months.toFixed(1)} months`;
 }
 
 function Stat({ label, value, cls = "" }: { label: string; value: string; cls?: string }) {
