@@ -26,6 +26,12 @@ in `package.json` to match.
 - A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
   trend, adding up to the total.
 
+### Install (Umbrel)
+- **Automatic backups**: a new `backup` service writes a full copy of the database to `data/backups` when it starts and
+  then once a day, keeping the last 14 days (`BACKUP_EVERY_HOURS` and `BACKUP_KEEP_DAYS` in `.env`). `./restore.sh`
+  puts the database back to one (saving a copy of the current one first), and `make backup-pull` copies the backups
+  to the computer you deploy from. See README.txt.
+
 ### Assets
 - Give each asset category a **target**: the share of your total value you aim to keep in it, set beside the category
   under Settings → Categories (which also shows what the targets add up to). On Assets, the Allocation chart marks

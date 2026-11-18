@@ -17,5 +17,18 @@ Update later: copy a new money-life-image.tar.gz over, then
      docker load < money-life-image.tar.gz && docker compose up -d
 (migrations run automatically on start).
 
-Data lives in ./data/postgres next to docker-compose.yml. Back that folder up.
+Data lives in ./data/postgres next to docker-compose.yml.
+
+Backups
+The `backup` service writes a full copy of the database to ./data/backups once a day and keeps the last 14 days
+(change BACKUP_EVERY_HOURS and BACKUP_KEEP_DAYS in .env). The first one is written when it starts. Check them:
+     ls -lh data/backups
+     sudo docker compose logs backup
+They sit on the same disk as the database, so also copy them somewhere else now and then. From the computer you
+deploy from:
+     make backup-pull          # copies them into ./backups there
+
+To put the database back to a backup (everything in it now is replaced; a copy of it is saved first):
+     ./restore.sh data/backups/money-life-20261118-030000.dump
+Run ./restore.sh with nothing after it to list the backups.
 Choose the password before the first start: Postgres ignores later changes to it.
