@@ -51,7 +51,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   if (rows.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
         <div className="rounded-[28px] bg-gradient-to-br from-[var(--hero-a)] via-[var(--hero-b)] to-[var(--hero-c)] p-6 text-white sm:p-8">
           <p className="text-3xl" aria-hidden>🌱</p>
           <h1 className="mt-2 text-2xl text-white sm:text-3xl">Hi {user.name}, let&apos;s set you up</h1>
@@ -201,7 +201,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <StaleNotice items={stale} />
 
       {/* How much do I have? */}

@@ -20,7 +20,7 @@ export default async function JournalPage() {
   const [entries, mine] = await Promise.all([listJournal(user.id), journalMoney(user.id, today)]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl">Journal</h1>
