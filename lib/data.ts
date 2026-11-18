@@ -2,7 +2,7 @@ import "server-only";
 import { btcFx } from "./btc";
 import { pool } from "./db";
 import { convertTrades, deriveTrades } from "./investment";
-import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlyNote, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
+import type { Account, Bill, Goal, GoalVersion, Category, Entry, Frequency, JournalEntry, Plan, PlanItem, PricePoint, MonthlyIncome, MonthlyNote, MonthlySpending, Spending, SpendingCategory, Tier, Total, Trade, Transfer } from "./types";
 
 /* Every query takes the user id and filters on it: an id in a URL or form is never trusted by itself. */
 
@@ -321,4 +321,12 @@ export async function listMonthlySpending(userId: number): Promise<MonthlySpendi
   );
   const fx = await btcFx(userId);
   return rows.map((r) => ({ categoryId: Number(r.category_id), month: r.month as string, amount: fx ? fx.at(Number(r.amount), `${r.month}-01`) : Number(r.amount) }));
+}
+
+/** What came in each month, oldest first. */
+export async function listMonthlyIncome(userId: number): Promise<MonthlyIncome[]> {
+  const { rows } = await pool.query(
+    "SELECT to_char(month, 'YYYY-MM') AS month, amount FROM monthly_income WHERE user_id = $1 ORDER BY month", [userId]);
+  const fx = await btcFx(userId);
+  return rows.map((r) => ({ month: r.month as string, amount: fx ? fx.at(Number(r.amount), `${r.month}-01`) : Number(r.amount) }));
 }

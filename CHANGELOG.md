@@ -15,12 +15,18 @@ in `package.json` to match.
   last 12 months: about two times in three the value should land inside it. It widens the further ahead it looks,
   with more room above than below, and the figure for the end date shows it too. It needs at least 3 months of
   investment history; the money you put in is taken as certain.
-- New **How long it would last** card: how many months the assets you can turn into cash within days would cover
+- New **Your safety net** card. How long it would last: how many months the assets you can turn into cash within days would cover
   your essentials (Must and Need spending, categories not sorted yet, and your bills) if nothing came in, and how
   long at your usual spending. Spending is averaged over the last 6 whole months you recorded. Under 3 months shows
-  in red.
+  in red. Under it, your **savings rate**: what you kept of your income over the last 6 whole months you recorded
+  it, after everyday spending, hobbies and bills.
 - A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
   trend, adding up to the total.
+
+### Spending
+- Type the month's **income** at the top of the month's form on Everyday spending (Fill empty from last month fills it
+  too). A new **Saved** tile shows what you kept that month, after everyday spending, hobbies bought that month and
+  your bills at their monthly cost, and what share of the income that is.
 
 ## [1.6.0] - 2026-11-15
 

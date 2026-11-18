@@ -4,8 +4,9 @@ import GoalMiniChart, { type MiniPoint } from "@/components/GoalMiniChart";
 import Info from "@/components/Info";
 import { signSwatch } from "@/components/Sign";
 import StaleNotice from "@/components/StaleNotice";
-import { listAccounts, listBills, listCategories, listEntries, listGoals, listGoalVersions, listMonthlySpending, listPlanItems, listPlans, listPrices, listSpendingCategories, listTrades } from "@/lib/data";
+import { listAccounts, listBills, listCategories, listHobbySpending, listMonthlyIncome, listEntries, listGoals, listGoalVersions, listMonthlySpending, listPlanItems, listPlans, listPrices, listSpendingCategories, listTrades } from "@/lib/data";
 import { runway } from "@/lib/runway";
+import { savingsRate } from "@/lib/savings";
 import { goalAssets } from "@/lib/goal-data";
 import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoins } from "@/lib/goals";
 import { addMonths } from "@/lib/plan";
@@ -41,7 +42,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listPlans(user.id), listPlanItems(user.id), listCategories(user.id),
   ]);
   const [goals, goalVersions, { listsOf: goalLists }] = await Promise.all([listGoals(user.id), listGoalVersions(user.id), goalAssets(user.id)]);
-  const [spendingCats, monthlySpending, bills] = await Promise.all([listSpendingCategories(user.id), listMonthlySpending(user.id), listBills(user.id)]);
+  const [spendingCats, monthlySpending, bills, monthlyIncome, hobbies] = await Promise.all([
+    listSpendingCategories(user.id), listMonthlySpending(user.id), listBills(user.id), listMonthlyIncome(user.id), listHobbySpending(user.id),
+  ]);
   const rows = holdings(accounts, entries, trades, prices);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -150,6 +153,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const planned = [...ahead.payments.map((p) => ({ ...p, income: false })), ...ahead.income.map((p) => ({ ...p, income: true }))].sort((a, b) => a.date.localeCompare(b.date));
 
   // How long the money you can reach within days would last on your essentials, if nothing came in.
+  // How much of what comes in you keep, over the last 6 whole months with income recorded.
+  const keep = savingsRate(today, monthlyIncome, monthlySpending, hobbies, bills, 6);
   const run = runway(rows.map((h) => ({ liquidity: h.account.liquidity, value: h.value })), spendingCats, monthlySpending, bills, today);
 
   const forecastEnd = hasPlans ? ahead.end.afterPlans : ahead.end.trend;
@@ -243,13 +248,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       {/* Could I cope without income? */}
       <section className="card p-5 sm:p-6">
         <h2 className="flex items-center gap-2 text-lg">
-          How long it would last
-          <Info>
+          Your safety net
+          <Info label="About how long it would last">
             If nothing came in, how many months the assets you can turn into cash within days ({money(run.liquid, cur)}) would cover.
             Essentials are your Must and Need spending (and categories not sorted yet), averaged over the last {run.basisMonths || 6} whole months you recorded, plus your bills.
             Investments that take months or years to sell, and retirement money, are left out.
           </Info>
         </h2>
+        <p className="mt-2 text-sm text-ink-2">How long it would last if nothing came in</p>
         {run.essentialMonths === null ? (
           <p className="mt-1 text-sm text-ink-3">
             Record your <Link href="/spending" className="font-semibold text-brand-dk">everyday spending</Link> or add your <Link href="/bills" className="font-semibold text-brand-dk">bills</Link> to see how long your cash would last.
@@ -271,6 +277,27 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             {run.essentialMonths < 3 && <p className="text-sm text-ink-3 sm:ml-auto sm:max-w-56">A common rule of thumb is to keep 3–6 months of essentials within easy reach.</p>}
           </div>
         )}
+        <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-2 border-t border-line pt-4">
+          <div>
+            <p className="eyebrow flex items-center gap-1.5">
+              Savings rate
+              <Info label="About the savings rate">
+                What you kept of your income over the last {keep.months.length || 6} whole months you recorded it: income less everyday spending, hobbies and bills (at their monthly cost), over income. Type each month&apos;s income on the Everyday spending page.
+              </Info>
+            </p>
+            {keep.rate === null ? (
+              <p className="text-sm text-ink-3"><Link href="/spending" className="font-semibold text-brand-dk">Add your income</Link> next to a month&apos;s spending to see it.</p>
+            ) : (
+              <p className={`num text-2xl font-extrabold ${keep.rate < 0 ? "text-miss-text" : ""}`}>{Math.round(keep.rate * 100)}%</p>
+            )}
+          </div>
+          {keep.perMonth !== null && (
+            <p className="num text-xs text-ink-3">
+              {signedMoney(keep.perMonth, cur)} a month on average, over {keep.months.length} {keep.months.length === 1 ? "month" : "months"}
+              {ahead.basisMonths >= 1 && <> · your assets took in {signedMoney(trendModel.saved, cur)} a month</>}
+            </p>
+          )}
+        </div>
       </section>
 
       {/* Am I on track? */}

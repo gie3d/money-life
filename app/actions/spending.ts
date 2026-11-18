@@ -34,6 +34,10 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
     if (note && note.length > 300) return { error: `Keep the remark for ${r.name} to 300 characters.` };
     changes.push({ id: Number(r.id), amount, note });
   }
+  // `income` is what came in: empty clears it; absent (not on the form) leaves it as it is.
+  const rawIncome = form.get("income");
+  const income = rawIncome === null ? undefined : String(rawIncome).trim() === "" ? null : num(rawIncome);
+  if (typeof income === "number" && !(income >= 0 && income < 1e16)) return { error: "Check the income." };
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -49,6 +53,11 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
          ON CONFLICT (category_id, month) DO UPDATE SET note = EXCLUDED.note`,
         [c.id, `${month}-01`, c.note]);
     }
+    if (income === null) await client.query("DELETE FROM monthly_income WHERE user_id = $1 AND month = $2", [user.id, `${month}-01`]);
+    else if (income !== undefined) await client.query(
+      `INSERT INTO monthly_income (user_id, month, amount) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, month) DO UPDATE SET amount = EXCLUDED.amount`,
+      [user.id, `${month}-01`, income]);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -57,6 +66,7 @@ export async function saveMonth(month: string, _: FormState, form: FormData): Pr
     client.release();
   }
   revalidatePath("/spending");
+  revalidatePath("/");
 }
 
 /** Adds a category at the end of the list. A removed one with the same name comes back, with its past months. */

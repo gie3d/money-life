@@ -255,6 +255,8 @@ export type Tier = "must" | "need" | "want";
 export type SpendingCategory = { id: number; name: string; position: number; archived: boolean; tier: Tier | null };
 
 /** What one everyday category came to in one month ("2026-11"). */
+/** What came in during one month (yyyy-mm). */
+export type MonthlyIncome = { month: string; amount: number };
 export type MonthlySpending = { categoryId: number; month: string; amount: number };
 
 /** A remark on one everyday category in one month ("2026-11"). */

@@ -6,7 +6,8 @@ import type { TableRow } from "@/components/MonthTable";
 import SpendingBreakdown from "@/components/SpendingBreakdown";
 import { CategoryBars, Change, PeriodSwitcher, ShareBar, Tile } from "@/components/SpendingCharts";
 import { startSpendingCategories } from "@/app/actions/spending";
-import { listMonthlyNotes, listMonthlySpending, listSpendingCategories } from "@/lib/data";
+import { listBills, listHobbySpending, listMonthlyIncome, listMonthlyNotes, listMonthlySpending, listSpendingCategories } from "@/lib/data";
+import { savedIn } from "@/lib/savings";
 import { money, monthLabel } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 import { amountOf, change, compareMonth, isMonth, monthsBetween, shiftMonth, STARTER_CATEGORIES, tierTotals, TIERS, UNSORTED } from "@/lib/spending";
@@ -28,7 +29,10 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
   const month = isMonth(sp.month) && sp.month <= thisMonth ? sp.month : thisMonth;
   const href = (m: string) => (m === thisMonth ? "/spending" : `/spending?month=${m}`);
 
-  const [categories, amounts, notes] = await Promise.all([listSpendingCategories(user.id), listMonthlySpending(user.id), listMonthlyNotes(user.id)]);
+  const [categories, amounts, notes, income, hobbies, bills] = await Promise.all([
+    listSpendingCategories(user.id), listMonthlySpending(user.id), listMonthlyNotes(user.id), listMonthlyIncome(user.id), listHobbySpending(user.id), listBills(user.id),
+  ]);
+  const incomeOf = (m: string) => income.find((i) => i.month === m)?.amount ?? null;
   const noteOf = (id: number) => notes.find((n) => n.categoryId === id && n.month === month)?.note ?? "";
   // A category's colour follows its place among all of them, so it stays the same on every chart and month.
   const colorOf = new Map(categories.map((c, i) => [c.id, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]));
@@ -52,6 +56,8 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
     .filter((r) => r.total > 0)
     .sort((a, b) => b.total - a.total);
   const top = rows[0];
+  // What was kept of the month's income, after everyday spending, hobbies and bills.
+  const kept = savedIn(month, income, amounts, hobbies, bills);
 
   const segments = (m: string) => categories.map((c) => ({ label: c.name, color: colorOf.get(c.id)!, value: amountOf(amounts, c.id, m) }));
   const bars = monthsBetween(shiftMonth(month, -11), month).map((m, i) => ({ key: m, label: shortMonth(m, i === 0), href: href(m), segments: segments(m) }));
@@ -126,7 +132,7 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
         </>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Tile label={`Spent in ${monthLabel(month)}`} value={money(cmp.total, cur)}>
               <Change value={change(cmp.total, cmp.prevTotal)} against={`vs ${against}`} />
             </Tile>
@@ -135,13 +141,18 @@ export default async function EverydaySpendingPage({ searchParams }: PageProps<"
                 ? <span className="text-ink-3">Nothing recorded before {monthLabel(month)}</span>
                 : <Change value={change(cmp.total, cmp.average)} against="vs the average" />}
             </Tile>
+            <Tile label={`Saved in ${monthLabel(month)}`} value={kept ? money(kept.saved, cur) : "—"}>
+              {kept
+                ? <span className={kept.saved < 0 ? "text-miss-text" : "text-ink-3"}>{kept.rate === null ? "—" : `${Math.round(kept.rate * 100)}%`} of {money(kept.income, cur)} income, after hobbies and bills</span>
+                : <span className="text-ink-3">Type the month&apos;s income below to see it</span>}
+            </Tile>
             <Tile label="Biggest category" value={top ? top.category : "—"}>
               {top ? <span className="text-ink-3">{money(top.total, cur)} · {Math.round((top.total / cmp.total) * 100)}% of the month</span> : <span className="text-ink-3">Nothing recorded for this month yet</span>}
             </Tile>
           </div>
 
           <div className="grid items-start gap-5 lg:grid-cols-2">
-            <MonthSpendingForm key={month} month={month} label={monthLabel(month)} prevLabel={against} rows={formRows} currency={cur} />
+            <MonthSpendingForm key={month} month={month} label={monthLabel(month)} prevLabel={against} rows={formRows} income={{ amount: incomeOf(month), last: incomeOf(cmp.prev) }} currency={cur} />
             <CategoryBars title={`Where it went in ${monthLabel(month)}`} rows={rows} currency={cur} against={`vs ${against}`}
               footer={<ShareBar title="Must, need, want" rows={tierRows.filter((t) => t.total > 0 || t.id !== "none").map((t) => ({ category: t.label, color: t.color, total: t.total, before: t.before }))} currency={cur} against={`vs ${against}`} />} />
           </div>
