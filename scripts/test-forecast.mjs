@@ -1,6 +1,6 @@
 // node --experimental-strip-types scripts/test-forecast.mjs
 import assert from "node:assert/strict";
-import { combined, forecast, layered, model, project } from "../lib/forecast.ts";
+import { combined, forecast, layered, model, project, volatility } from "../lib/forecast.ts";
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} !~ ${b}`);
 const pt = (date, value) => ({ date, value, cost: 0 });
@@ -70,5 +70,36 @@ assert.ok(Math.abs(f.monthly - 100) < 1.5, String(f.monthly));
   near(fm.end.trend, 25_000 + 12_100);
   const rows = layered(fm.points, [{ id: "a", series: [pt("2025-11-08", 1_000), pt(T, 13_000)], model: cash }, { id: "b", series: [pt("2025-11-08", 10_000), pt(T, 11_000)], model: inv }], T);
   rows.forEach((r, i) => { if (fm.points[i].trend !== null) near(r.a + r.b, fm.points[i].trend); });
+}
+
+// The likely range: from the month-to-month swings of the investments.
+{
+  const e = (date, value, contribution = 0) => ({ id: 0, accountId: 0, date, value, contribution, note: null });
+  const T = "2026-11-08";
+  // Steady +1% every month: no swing, so the range closes up on the line.
+  const steady = [];
+  for (let j = 12; j >= 0; j--) steady.push(e(new Date(Date.UTC(2026, 10 - j, 8)).toISOString().slice(0, 10), 1000 * 1.01 ** (12 - j)));
+  near(volatility([{ entries: steady, investment: true }], T), 0);
+  // Up 10%, down 10%, in turn: a wide swing.
+  const choppy = [];
+  for (let j = 12, v = 1000; j >= 0; j--, v *= j % 2 ? 1.1 : 0.9) choppy.push(e(new Date(Date.UTC(2026, 10 - j, 8)).toISOString().slice(0, 10), v));
+  const vol = volatility([{ entries: choppy, investment: true }], T);
+  assert.ok(vol > 0.09 && vol < 0.12, String(vol));
+  // Cash doesn't swing the range, and under 3 months there's no range at all.
+  assert.equal(volatility([{ entries: [e("2026-09-08", 1), e(T, 2)], investment: true }], T), null);
+  near(volatility([{ entries: steady, investment: true }, { entries: [e("2025-11-08", 0), e("2026-05-08", 50_000), e(T, 9)], investment: false }], T), 0);
+  // The band sits around the after-plans line, widens over time, and is lopsided (more room up than down).
+  const m = { ...model([{ entries: choppy, investment: true }], T), volatility: vol };
+  const f = forecast([pt("2025-11-08", 1000), pt(T, choppy.at(-1).value)], T, [pay("2027-01-01", 100)], 12, 12, [], m);
+  const at = (d) => f.points.find((p) => p.date === d);
+  assert.equal(at("2026-10-31").low, null);
+  near(at(T).low, at(T).afterPlans);
+  const k1 = at("2026-12-08"), k12 = f.points.at(-1);
+  assert.ok(k1.low < k1.afterPlans && k1.high > k1.afterPlans);
+  assert.ok(k12.high - k12.low > k1.high - k1.low);
+  assert.ok(k12.high - k12.afterPlans > k12.afterPlans - k12.low);
+  near(f.end.low, k12.low);
+  // Without a volatility there is no band.
+  assert.equal(forecast([pt(T, 1)], T, [], 6, 12, [], model([], T)).end.low, null);
 }
 console.log("forecast ok");

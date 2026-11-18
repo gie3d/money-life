@@ -10,7 +10,7 @@ import { monthsBetween, path, standing, targetValue, valueOn, valuesOn, withJoin
 import { addMonths } from "@/lib/plan";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
 import { daysBetween, extendTo, netWorthSeries } from "@/lib/performance";
-import { combined, forecast, layered, model } from "@/lib/forecast";
+import { combined, forecast, layered, model, volatility } from "@/lib/forecast";
 import { incomePayments, payments } from "@/lib/plan";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -136,7 +136,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       };
     })
     .sort((a, b) => a.rank - b.rank);
-  const trendModel = combined(layers.map((l) => l.model));
+  // The likely range comes from how much all the investments together have swung month to month.
+  const trendModel = { ...combined(layers.map((l) => l.model)), volatility: volatility(rows.map((h, i) => ({ entries: lists[i], investment: h.investment })), today, 12) };
   const ahead = forecast(history, today, payments(activeItems), span, 12, incomePayments(activeItems), trendModel);
   const layerRows = layered(ahead.points, layers, today);
   const layerInfo = layers.map(({ id, name, color }) => ({ id, name, color }));
@@ -180,6 +181,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               Where it&apos;s heading
               <Info>
                 The trend splits the last 12 months (or the time since your first record) in two: the money you put in or took out, averaged per month, and what your investments earned on their own. Both carry on: the money you put in adds up month by month, and your investments keep growing at their recent rate, compounding. A large one-off deposit therefore counts as money put in, not as growth.
+                {ahead.end.low !== null && " The shaded band is a likely range: how far your investments could drift either way if the coming months swing as much as the last 12 did. About two times in three the value should land inside it; the money you put in is taken as certain."}
                 {hasPlans && " The dotted line also takes off the costs in your plans, and adds their income, as they fall due."} It is a forecast only: your assets are not changed.
               </Info>
             </h2>
@@ -195,6 +197,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           <div className="text-right">
             <p className="eyebrow">By {day(ahead.end.date)}{hasPlans && ", after plans"}</p>
             <p className={`num text-2xl font-extrabold ${forecastEnd < 0 ? "text-miss-text" : ""}`}>{money(forecastEnd, cur)}</p>
+            {ahead.end.low !== null && ahead.end.high !== null && (
+              <p className="num text-xs text-ink-3">likely {money(ahead.end.low, cur)} – {money(ahead.end.high, cur)}</p>
+            )}
           </div>
         </div>
         <nav aria-label="How far to look" className="mb-3 inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-semibold">
@@ -205,7 +210,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             </Link>
           ))}
         </nav>
-        <ForecastChart points={ahead.points} layerRows={layerRows} layers={layerInfo} today={today} currency={cur} withPlans={hasPlans} />
+        <ForecastChart withBand={ahead.end.low !== null} points={ahead.points} layerRows={layerRows} layers={layerInfo} today={today} currency={cur} withPlans={hasPlans} />
         {hasPlans && (
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-semibold text-ink-2">More detail</summary>

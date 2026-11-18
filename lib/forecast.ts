@@ -15,6 +15,9 @@ export type ForecastPoint = {
   trend: number | null;
   /** The trend less plan costs and plus plan income due by this date; null in the past. */
   afterPlans: number | null;
+  /** A likely range around the after-plans line, from how much investments have swung month to month; null in the past or without enough history. */
+  low: number | null;
+  high: number | null;
 };
 
 export type Forecast = {
@@ -31,7 +34,7 @@ export type Forecast = {
   /** How the trend was split: money saved a month and investment growth, when a model was given. */
   model: Model | null;
   /** Value at the end of the forecast, on the trend and after plan payments. */
-  end: { date: string; trend: number; afterPlans: number };
+  end: { date: string; trend: number; afterPlans: number; low: number | null; high: number | null };
 };
 
 /** The value on `date`: the last point on or before it, or 0 before the first. */
@@ -70,18 +73,22 @@ export function forecast(series: Point[], today: string, planPayments: Payment[]
   for (let k = months; k >= 1; k--) {
     const monthEnd = addMonths(`${today.slice(0, 7)}-01`, -k + 1);
     const date = new Date(ms(monthEnd) - DAY).toISOString().slice(0, 10);
-    if (date >= first && date < today) points.push({ date, actual: valueOn(series, date), trend: null, afterPlans: null });
+    if (date >= first && date < today) points.push({ date, actual: valueOn(series, date), trend: null, afterPlans: null, low: null, high: null });
   }
   // Today joins the lines; payments due today have not left the recorded value yet.
-  points.push({ date: today, actual: now, trend: now, afterPlans: now - dueBy(today) + incomeBy(today) });
+  const todayAfter = now - dueBy(today) + incomeBy(today);
+  const band = model?.volatility != null;
+  points.push({ date: today, actual: now, trend: now, afterPlans: todayAfter, low: band ? todayAfter : null, high: band ? todayAfter : null });
   for (let k = 1; k <= months; k++) {
     const date = addMonths(today, k);
     const trend = model ? projectAll(model, k) : now + monthly * k;
-    points.push({ date, actual: null, trend, afterPlans: trend - dueBy(date) + incomeBy(date) });
+    const afterPlans = trend - dueBy(date) + incomeBy(date);
+    const spread = model && band ? spreadAt(model, k) : null;
+    points.push({ date, actual: null, trend, afterPlans, low: spread && afterPlans - spread.down, high: spread && afterPlans + spread.up });
   }
 
   const last = points[points.length - 1];
-  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, model, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans! } };
+  return { points, today: now, monthly, basisMonths: Math.min(basisMonths, lookback), payments, income, model, end: { date: last.date, trend: last.trend!, afterPlans: last.afterPlans!, low: last.low, high: last.high } };
 }
 
 /**
@@ -98,6 +105,8 @@ export type Model = {
   rate: number;
   /** Months the averages are taken over (under one: no trend at all). */
   basisMonths: number;
+  /** How much the investments' monthly return has varied (its standard deviation); null with under 3 months to go on. */
+  volatility?: number | null;
 };
 
 export type ModelAsset = { entries: Entry[]; investment: boolean };
@@ -129,6 +138,44 @@ export function model(assets: ModelAsset[], today: string, lookback = 12): Model
   if (basisMonths < 1) return { invested, other, saved: 0, rate: 0, basisMonths };
   const ret = base > 0 ? gain / base : 0;
   return { invested, other, saved: (change - gain) / basisMonths, rate: ret > -1 ? (1 + ret) ** (1 / basisMonths) - 1 : 0, basisMonths };
+}
+
+/**
+ * How far the line may land below and above the trend after `k` months: one standard deviation of the monthly
+ * swings, widening with the square root of time, applied to what the investments are projected to be worth.
+ * About two times in three the value should land inside it, if the coming months swing as the past ones did.
+ * Money put in is taken as certain, so only investments widen the range.
+ */
+function spreadAt(m: Model & { parts?: Model[] }, k: number) {
+  const invested = (m.parts ?? [m]).reduce((s, p) => s + p.invested * (1 + p.rate) ** k, 0);
+  const w = (m.volatility ?? 0) * Math.sqrt(k);
+  return { down: invested * (1 - Math.exp(-w)), up: invested * (Math.exp(w) - 1) };
+}
+
+/**
+ * The standard deviation of the investments' monthly return, month by month over the lookback (each month's
+ * gain over the money in it, as in the model). Null with fewer than 3 whole months to go on.
+ */
+export function volatility(assets: ModelAsset[], today: string, lookback = 12): number | null {
+  const inv = assets.filter((a) => a.investment);
+  const first = inv.flatMap((a) => a.entries).reduce((m, e) => (e.date < m ? e.date : m), today);
+  const returns: number[] = [];
+  for (let j = 1; j <= lookback; j++) {
+    const from = addMonths(today, -j);
+    if (from < first) break;
+    const to = addMonths(today, -j + 1);
+    let gain = 0, base = 0;
+    for (const a of inv) {
+      const p = accountPerformance(a.entries, from, to);
+      if (!p) continue;
+      gain += p.gain;
+      base += p.returnPct && p.returnPct !== -1 ? p.gain / p.returnPct : p.start;
+    }
+    if (base > 0) returns.push(gain / base);
+  }
+  if (returns.length < 3) return null;
+  const mean = returns.reduce((s, r) => s + r, 0) / returns.length;
+  return Math.sqrt(returns.reduce((s, r) => s + (r - mean) ** 2, 0) / (returns.length - 1));
 }
 
 /** The value `k` months from today: investments compounding at the model's rate, plus what is saved by then (which isn't grown). */

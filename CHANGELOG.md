@@ -11,6 +11,10 @@ in `package.json` to match.
   The money you put in carries on at its monthly average, and your investments keep growing at their recent rate,
   compounding. A large one-off deposit no longer reads as growth. The line under the title now says how much you
   have been putting in a month and how fast your investments have grown in a year.
+- A shaded **likely range** around the line, from how much your investments have swung month to month over the
+  last 12 months: about two times in three the value should land inside it. It widens the further ahead it looks,
+  with more room above than below, and the figure for the end date shows it too. It needs at least 3 months of
+  investment history; the money you put in is taken as certain.
 - A **Total / By category** switch on the chart: By category stacks one layer per asset category, each on its own
   trend, adding up to the total.
 

@@ -7,17 +7,19 @@ import { SignGradient, signStroke, signSwatch, toned } from "./Sign";
 import { RangeLabel, rangeBrush, useRange } from "./RangeBrush";
 import type { ForecastPoint, LayerRow } from "@/lib/forecast";
 
-const NAMES: Record<string, string> = { actual: "Recorded", trend: "Trend", afterPlans: "After plans" };
+const NAMES: Record<string, string> = { actual: "Recorded", trend: "Trend", afterPlans: "After plans", range: "Likely range" };
 const month = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
 
 /** The recent months as recorded (solid), then the trend and the trend less plan costs (dashed), meeting at today. */
-export default function ForecastChart({ points, layerRows, layers, today, currency, withPlans }: {
-  points: ForecastPoint[]; layerRows: LayerRow[]; layers: { id: string; name: string; color: string }[]; today: string; currency: string; withPlans: boolean;
+export default function ForecastChart({ points, layerRows, layers, today, currency, withPlans, withBand }: {
+  withBand: boolean; points: ForecastPoint[]; layerRows: LayerRow[]; layers: { id: string; name: string; color: string }[]; today: string; currency: string; withPlans: boolean;
 }) {
   const [stacked, setStacked] = useState(false);
   const range = useRange(points.length);
   // The stacked view carries the plans line on the same rows, so it can sit over the layers.
-  const rows = stacked ? layerRows.map((r, i) => ({ ...r, afterPlans: points[i].afterPlans })) : points;
+  const rows = stacked
+    ? layerRows.map((r, i) => ({ ...r, afterPlans: points[i].afterPlans }))
+    : points.map((p) => ({ ...p, range: p.low !== null && p.high !== null ? [p.low, p.high] : null }));
   const name = (d: string) => (d === today ? "Today" : month(d));
   return (
     <div className="space-y-3">
@@ -32,6 +34,7 @@ export default function ForecastChart({ points, layerRows, layers, today, curren
         {!stacked && <li className="flex items-center gap-2"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Recorded</li>}
         {!stacked && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-go" />Trend</li>}
         {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-brand" />After plans</li>}
+        {!stacked && withBand && <li className="flex items-center gap-2"><span className="h-3 w-5 rounded-sm bg-brand/20" />Likely range</li>}
       </ul>
       <RangeLabel from={day(points[range.start].date)} to={day(points[range.end].date)} range={range} length={points.length} />
       <div className="h-80 w-full" role="img" aria-label="Total value as recorded and the forecast ahead">
@@ -48,10 +51,14 @@ export default function ForecastChart({ points, layerRows, layers, today, curren
             <ReferenceLine x={today} stroke="var(--ink-3)" strokeDasharray="2 3" />
             <Tooltip
               labelFormatter={(d) => (String(d) === today ? `Today, ${day(today)}` : day(String(d)))}
-              formatter={(v, name) => [String(name) === "actual" ? toned(Number(v), currency) : money(Number(v), currency), NAMES[String(name)] ?? String(name)]}
+              formatter={(v, name) => [
+                Array.isArray(v) ? `${money(Number(v[0]), currency)} – ${money(Number(v[1]), currency)}` : String(name) === "actual" ? toned(Number(v), currency) : money(Number(v), currency),
+                NAMES[String(name)] ?? String(name),
+              ]}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" }}
             />
             {stacked && layers.map((l) => <Area key={l.id} type="linear" dataKey={l.id} name={l.name} stackId="cat" stroke={l.color} strokeWidth={1.5} fill={l.color} fillOpacity={0.35} />)}
+            {!stacked && withBand && <Area type="linear" dataKey="range" stroke="none" fill="var(--brand)" fillOpacity={0.14} connectNulls={false} activeDot={false} />}
             {!stacked && <Area type="linear" dataKey="actual" stroke={signStroke("forecast-actual", points.slice(range.start, range.end + 1).map((p) => p.actual))} strokeWidth={2.5} fill="url(#forecast-actual)" fillOpacity={0.18} connectNulls={false} />}
             {!stacked && <Line type="linear" dataKey="trend" stroke="var(--go)" strokeWidth={2} strokeDasharray="5 4" dot={false} />}
             {withPlans && <Line type="linear" dataKey="afterPlans" stroke="var(--brand)" strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />}
