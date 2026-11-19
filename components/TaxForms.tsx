@@ -14,7 +14,7 @@ const Error = ({ state }: { state: TaxState }) =>
 
 function YearAndName({ year, name, years }: { year: number; name: string; years: number[] }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
+    <div className="grid gap-3 sm:grid-cols-[14rem_1fr]">
       <label className="block space-y-1.5">
         <span className="eyebrow">ปีภาษี</span>
         <select name="year" defaultValue={year} className="field">
