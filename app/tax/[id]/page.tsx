@@ -140,18 +140,18 @@ export default async function TaxPlanPage({ params }: PageProps<"/tax/[id]">) {
         </div>
       </Step>
 
-      <Step n={2} title="Expenses and deductions (ค่าใช้จ่ายและค่าลดหย่อน)" sub="Expenses come off each income by its type, worked out for you. Type what you paid for each deduction as it is: the limits are applied in step 3.">
+      <Step n={2} title="ค่าใช้จ่ายและค่าลดหย่อน" sub="ค่าใช้จ่ายคำนวณให้อัตโนมัติตามประเภทเงินได้ ค่าลดหย่อนให้กรอกตามที่จ่ายจริง ระบบจะใช้เพดานของแต่ละรายการในขั้นที่ 3">
         {r.expenses.length > 0 && (
           <div>
-            <h3 className="mb-1 text-sm font-bold">Expenses (ค่าใช้จ่าย)</h3>
+            <h3 className="mb-1 text-sm font-bold">ค่าใช้จ่าย</h3>
             <ul className="divide-y divide-line">
               {r.expenses.map((e) => <Row key={e.income.id} label={`${typeLabel(e.income.type)} ${e.income.name}`} hint={e.note} value={e.expense} />)}
-              <Row label="Total expenses" value={r.expenseTotal} strong />
+              <Row label="รวมค่าใช้จ่าย" value={r.expenseTotal} strong />
             </ul>
           </div>
         )}
         <div className="border-t border-line pt-4">
-          <h3 className="mb-3 text-sm font-bold">Deductions (ค่าลดหย่อน)</h3>
+          <h3 className="mb-3 text-sm font-bold">ค่าลดหย่อน</h3>
           <TaxDeductionsForm save={saveTaxDeductions.bind(null, plan.id)} d={plan.deductions} rules={rules} year={plan.year} />
         </div>
       </Step>

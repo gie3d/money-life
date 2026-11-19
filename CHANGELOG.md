@@ -18,6 +18,7 @@ in `package.json` to match.
   and donations. **3 How the tax is worked out**: every deduction with its limit applied (including the 500,000 cap
   on retirement savings together), net income, the tax in each bracket, the 0.5% minimum tax where it applies, and
   what is left to pay or comes back.
+- Step 2 (ค่าใช้จ่ายและค่าลดหย่อน) is in Thai: every deduction field, its limit and the expense notes.
 - The limits follow the tax year: social security up to 9,000 to 2025 and 10,500 from 2026, Easy e-Receipt 50,000 in
   2024 and 2025 (none announced for 2026), SSF only to 2024, Thai ESG 300,000 to 2026.
 

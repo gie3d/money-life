@@ -170,55 +170,55 @@ export function TaxDeductionsForm({ save, d, rules, year }: { save: Save; d: Ded
   const [edited, setEdited] = useState(false);
   return (
     <form action={action} onChange={() => setEdited(true)} onSubmit={() => setEdited(false)} className="space-y-6">
-      <Group title="Family (ค่าลดหย่อนส่วนตัวและครอบครัว)">
+      <Group title="ค่าลดหย่อนส่วนตัวและครอบครัว">
         <div className="space-y-1">
-          <span className="text-sm font-semibold">You</span>
+          <span className="text-sm font-semibold">ผู้มีเงินได้</span>
           <p className="field text-ink-3">60,000</p>
-          <span className="block text-xs text-ink-3">Everyone gets the personal allowance</span>
+          <span className="block text-xs text-ink-3">ทุกคนได้รับค่าลดหย่อนส่วนตัว</span>
         </div>
         <label className="flex items-start gap-2 self-center text-sm">
           <input type="checkbox" name="spouse" defaultChecked={d.spouse} className="mt-1" />
-          <span><span className="font-semibold">Spouse with no income</span><span className="block text-xs text-ink-3">Legally married, 60,000</span></span>
+          <span><span className="font-semibold">คู่สมรสไม่มีเงินได้</span><span className="block text-xs text-ink-3">จดทะเบียนสมรส 60,000 บาท</span></span>
         </label>
-        <Count name="childrenBefore2018" label="Children born before 2018" value={d.childrenBefore2018} hint="30,000 each, under 20 (or 25 in school)" />
-        <Count name="childrenFrom2018" label="Children born 2018 or later" value={d.childrenFrom2018} hint="30,000; 60,000 from the second child" />
-        <Count name="parents" label="Parents you support" value={d.parents} max={4} hint="30,000 each, aged 60+, income under 30,000. Up to 4" />
-        <Count name="disabled" label="Disabled dependants" value={d.disabled} hint="60,000 each, with a disability card" />
-        <Amount name="prenatal" label="Pregnancy and childbirth" value={d.prenatal} hint="Up to 60,000 a pregnancy" />
+        <Count name="childrenBefore2018" label="บุตรที่เกิดก่อนปี 2561" value={d.childrenBefore2018} hint="คนละ 30,000 บาท อายุไม่เกิน 20 ปี (หรือไม่เกิน 25 ปีถ้ายังเรียนอยู่)" />
+        <Count name="childrenFrom2018" label="บุตรที่เกิดตั้งแต่ปี 2561" value={d.childrenFrom2018} hint="30,000 บาท ตั้งแต่บุตรคนที่ 2 คนละ 60,000 บาท" />
+        <Count name="parents" label="บิดามารดาที่อุปการะ" value={d.parents} max={4} hint="คนละ 30,000 บาท อายุ 60 ปีขึ้นไป เงินได้ไม่เกิน 30,000 บาท สูงสุด 4 คน" />
+        <Count name="disabled" label="ผู้พิการหรือทุพพลภาพที่อุปการะ" value={d.disabled} hint="คนละ 60,000 บาท ต้องมีบัตรคนพิการ" />
+        <Amount name="prenatal" label="ค่าฝากครรภ์และค่าคลอดบุตร" value={d.prenatal} hint="ไม่เกิน 60,000 บาทต่อการตั้งครรภ์" />
       </Group>
 
-      <Group title="Insurance and social security (ประกัน)">
-        <Amount name="socialSecurity" label="Social security (ประกันสังคม)" value={d.socialSecurity} hint={`As paid, up to ${k(rules.socialSecurityCap)} in ${year}`} />
-        <Amount name="lifeInsurance" label="Life insurance" value={d.lifeInsurance} hint="Up to 100,000; a policy of 10 years or more" />
-        <Amount name="healthInsurance" label="Health insurance" value={d.healthInsurance} hint="Up to 25,000; with life insurance up to 100,000" />
-        <Amount name="spouseLifeInsurance" label="Spouse's life insurance" value={d.spouseLifeInsurance} hint="Up to 10,000, spouse with no income" />
-        <Amount name="parentsHealthInsurance" label="Parents' health insurance" value={d.parentsHealthInsurance} hint="Up to 15,000 for all parents" />
+      <Group title="ประกันและประกันสังคม">
+        <Amount name="socialSecurity" label="เงินสมทบประกันสังคม" value={d.socialSecurity} hint={`ตามที่จ่ายจริง ไม่เกิน ${k(rules.socialSecurityCap)} บาท ในปีภาษี ${year + 543}`} />
+        <Amount name="lifeInsurance" label="เบี้ยประกันชีวิต" value={d.lifeInsurance} hint="ไม่เกิน 100,000 บาท กรมธรรม์ 10 ปีขึ้นไป" />
+        <Amount name="healthInsurance" label="เบี้ยประกันสุขภาพ" value={d.healthInsurance} hint="ไม่เกิน 25,000 บาท รวมกับประกันชีวิตไม่เกิน 100,000 บาท" />
+        <Amount name="spouseLifeInsurance" label="เบี้ยประกันชีวิตคู่สมรส" value={d.spouseLifeInsurance} hint="ไม่เกิน 10,000 บาท คู่สมรสไม่มีเงินได้" />
+        <Amount name="parentsHealthInsurance" label="เบี้ยประกันสุขภาพบิดามารดา" value={d.parentsHealthInsurance} hint="รวมทุกคนไม่เกิน 15,000 บาท" />
       </Group>
 
-      <Group title="Saving and investing (เงินออมและการลงทุน)">
-        <Amount name="providentFund" label="Provident fund / GPF (PVD / กบข.)" value={d.providentFund} hint="Your part, up to 15% of salary" />
-        <Amount name="rmf" label="RMF" value={d.rmf} hint="Up to 30% of income, 500,000" />
-        <Amount name="pensionInsurance" label="Pension insurance (ประกันบำนาญ)" value={d.pensionInsurance} hint="Up to 15% of income, 200,000" />
-        <Amount name="ssf" label="SSF" value={d.ssf} hint={rules.ssfCap > 0 ? `Up to 30% of income, ${k(rules.ssfCap)}` : `Not deductible for ${year} (purchases up to 2024 only)`} />
-        <Amount name="thaiEsg" label="Thai ESG" value={d.thaiEsg} hint={`Up to 30% of income, ${k(rules.thaiEsgCap)}; its own cap`} />
-        <p className="text-xs text-ink-3 sm:col-span-2 lg:col-span-3">PVD, RMF, pension insurance and SSF together are capped at 500,000.</p>
+      <Group title="เงินออมและการลงทุน">
+        <Amount name="providentFund" label="กองทุนสำรองเลี้ยงชีพ / กบข." value={d.providentFund} hint="ส่วนที่ลูกจ้างจ่าย ไม่เกิน 15% ของค่าจ้าง" />
+        <Amount name="rmf" label="กองทุนรวมเพื่อการเลี้ยงชีพ (RMF)" value={d.rmf} hint="ไม่เกิน 30% ของเงินได้ และไม่เกิน 500,000 บาท" />
+        <Amount name="pensionInsurance" label="เบี้ยประกันชีวิตแบบบำนาญ" value={d.pensionInsurance} hint="ไม่เกิน 15% ของเงินได้ และไม่เกิน 200,000 บาท" />
+        <Amount name="ssf" label="กองทุนรวมเพื่อการออม (SSF)" value={d.ssf} hint={rules.ssfCap > 0 ? `ไม่เกิน 30% ของเงินได้ และไม่เกิน ${k(rules.ssfCap)} บาท` : `ใช้ลดหย่อนปีภาษี ${year + 543} ไม่ได้ (เฉพาะที่ซื้อถึงปี 2567)`} />
+        <Amount name="thaiEsg" label="กองทุนรวมไทยเพื่อความยั่งยืน (Thai ESG)" value={d.thaiEsg} hint={`ไม่เกิน 30% ของเงินได้ และไม่เกิน ${k(rules.thaiEsgCap)} บาท แยกวงเงินต่างหาก`} />
+        <p className="text-xs text-ink-3 sm:col-span-2 lg:col-span-3">กองทุนสำรองเลี้ยงชีพ RMF ประกันบำนาญ และ SSF รวมกันไม่เกิน 500,000 บาท</p>
       </Group>
 
-      <Group title="Spending and home (กระตุ้นเศรษฐกิจและที่อยู่อาศัย)">
-        <Amount name="homeLoanInterest" label="Home loan interest" value={d.homeLoanInterest} hint="Up to 100,000" />
-        <Amount name="easyEReceipt" label="Easy e-Receipt" value={d.easyEReceipt} hint={rules.easyEReceiptCap > 0 ? `Up to ${k(rules.easyEReceiptCap)}. ${rules.easyEReceiptNote}` : rules.easyEReceiptNote} />
+      <Group title="ที่อยู่อาศัยและมาตรการกระตุ้นเศรษฐกิจ">
+        <Amount name="homeLoanInterest" label="ดอกเบี้ยเงินกู้ซื้อที่อยู่อาศัย" value={d.homeLoanInterest} hint="ไม่เกิน 100,000 บาท" />
+        <Amount name="easyEReceipt" label="Easy e-Receipt" value={d.easyEReceipt} hint={rules.easyEReceiptCap > 0 ? `ไม่เกิน ${k(rules.easyEReceiptCap)} บาท ${rules.easyEReceiptNoteTh}` : rules.easyEReceiptNoteTh} />
       </Group>
 
-      <Group title="Donations (เงินบริจาค)">
-        <Amount name="donationDouble" label="Education, state hospitals, Thai Red Cross" value={d.donationDouble} hint="Counted twice, up to 10% of income after allowances" />
-        <Amount name="donationGeneral" label="Other donations" value={d.donationGeneral} hint="Temples, charities: up to 10% after allowances. e-Donation from 2026" />
-        <Amount name="politicalDonation" label="Political party" value={d.politicalDonation} hint="Up to 10,000" />
+      <Group title="เงินบริจาค">
+        <Amount name="donationDouble" label="บริจาคเพื่อการศึกษา โรงพยาบาลรัฐ สภากาชาดไทย" value={d.donationDouble} hint="หักได้ 2 เท่า ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อน" />
+        <Amount name="donationGeneral" label="เงินบริจาคทั่วไป" value={d.donationGeneral} hint="วัด มูลนิธิ ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อน ตั้งแต่ปี 2569 ต้องผ่าน e-Donation" />
+        <Amount name="politicalDonation" label="บริจาคพรรคการเมือง" value={d.politicalDonation} hint="ไม่เกิน 10,000 บาท" />
       </Group>
 
       <Error state={state} />
       <div className="flex items-center gap-3">
-        <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save deductions"}</button>
-        {state?.saved && !edited && !pending && <p role="status" className="text-sm font-semibold text-go-text">Saved</p>}
+        <button className="btn" disabled={pending}>{pending ? "กำลังบันทึก…" : "บันทึกค่าลดหย่อน"}</button>
+        {state?.saved && !edited && !pending && <p role="status" className="text-sm font-semibold text-go-text">บันทึกแล้ว</p>}
       </div>
     </form>
   );

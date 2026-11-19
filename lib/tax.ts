@@ -104,18 +104,20 @@ export type YearRules = {
   /** 0 when there was no scheme that year. */
   easyEReceiptCap: number;
   easyEReceiptNote: string;
+  /** The same note in Thai, for the deductions form. */
+  easyEReceiptNoteTh: string;
   /** 0 once purchases no longer count. */
   ssfCap: number;
   thaiEsgCap: number;
 };
 
 export const RULES: Record<number, YearRules> = {
-  2024: { socialSecurityCap: 9_000, easyEReceiptCap: 50_000, easyEReceiptNote: "Bought Jan 1 – Feb 15, 2024, with e-Tax invoices", ssfCap: 200_000, thaiEsgCap: 300_000 },
-  2025: { socialSecurityCap: 9_000, easyEReceiptCap: 50_000, easyEReceiptNote: "Easy e-Receipt 2.0, Jan 16 – Feb 28, 2025: up to 30,000 of anything, plus 20,000 of community and OTOP goods", ssfCap: 0, thaiEsgCap: 300_000 },
+  2024: { socialSecurityCap: 9_000, easyEReceiptCap: 50_000, easyEReceiptNote: "Bought Jan 1 – Feb 15, 2024, with e-Tax invoices", easyEReceiptNoteTh: "ซื้อสินค้าและบริการ 1 ม.ค. – 15 ก.พ. 2567 มีใบกำกับภาษีอิเล็กทรอนิกส์", ssfCap: 200_000, thaiEsgCap: 300_000 },
+  2025: { socialSecurityCap: 9_000, easyEReceiptCap: 50_000, easyEReceiptNote: "Easy e-Receipt 2.0, Jan 16 – Feb 28, 2025: up to 30,000 of anything, plus 20,000 of community and OTOP goods", easyEReceiptNoteTh: "Easy e-Receipt 2.0 ซื้อ 16 ม.ค. – 28 ก.พ. 2568 สินค้าทั่วไป 30,000 บาท และสินค้าวิสาหกิจชุมชน/OTOP อีก 20,000 บาท", ssfCap: 0, thaiEsgCap: 300_000 },
   // The wage ceiling rose to 17,500 a month from Jan 2026: 875 a month, 10,500 a year.
-  2026: { socialSecurityCap: 10_500, easyEReceiptCap: 0, easyEReceiptNote: "No Easy e-Receipt scheme announced for 2026", ssfCap: 0, thaiEsgCap: 300_000 },
+  2026: { socialSecurityCap: 10_500, easyEReceiptCap: 0, easyEReceiptNote: "No Easy e-Receipt scheme announced for 2026", easyEReceiptNoteTh: "ยังไม่มีประกาศโครงการ Easy e-Receipt สำหรับปีภาษี 2569", ssfCap: 0, thaiEsgCap: 300_000 },
   // Thai ESG goes back to 100,000 (8-year hold) from 2027.
-  2027: { socialSecurityCap: 10_500, easyEReceiptCap: 0, easyEReceiptNote: "No Easy e-Receipt scheme announced", ssfCap: 0, thaiEsgCap: 100_000 },
+  2027: { socialSecurityCap: 10_500, easyEReceiptCap: 0, easyEReceiptNote: "No Easy e-Receipt scheme announced", easyEReceiptNoteTh: "ยังไม่มีประกาศโครงการ Easy e-Receipt", ssfCap: 0, thaiEsgCap: 100_000 },
 };
 const RULE_YEARS = Object.keys(RULES).map(Number).sort((a, b) => a - b);
 export function rulesFor(year: number): YearRules {
@@ -212,13 +214,13 @@ export function calculate(year: number, incomes: TaxIncome[], d: Deductions): Ta
   const employ = shareCap(["40_1", "40_2"]);
   const royalty = shareCap(["40_3"]);
   const expenses = counted.map((i) => {
-    if (i.type === "40_1" || i.type === "40_2") return { income: i, expense: employ(i), note: "50%, up to 100,000 together with 40(1)/40(2)" };
-    if (i.type === "40_3") return { income: i, expense: royalty(i), note: "50%, up to 100,000" };
-    if (i.type === "40_4") return { income: i, expense: 0, note: "No expense for interest and dividends" };
-    if (i.actualExpense !== null) return { income: i, expense: Math.min(i.actualExpense, i.amount), note: "Actual expenses" };
+    if (i.type === "40_1" || i.type === "40_2") return { income: i, expense: employ(i), note: "50% รวม 40(1) และ 40(2) ไม่เกิน 100,000 บาท" };
+    if (i.type === "40_3") return { income: i, expense: royalty(i), note: "50% ไม่เกิน 100,000 บาท" };
+    if (i.type === "40_4") return { income: i, expense: 0, note: "ดอกเบี้ยและเงินปันผลหักค่าใช้จ่ายไม่ได้" };
+    if (i.actualExpense !== null) return { income: i, expense: Math.min(i.actualExpense, i.amount), note: "หักตามจริง" };
     const t = incomeType(i.type);
     const rate = t.kinds ? (t.kinds.find((k) => k.id === i.kind) ?? t.kinds[0]).rate : 0.6;
-    return { income: i, expense: i.amount * rate, note: `${Math.round(rate * 100)}% standard rate` };
+    return { income: i, expense: i.amount * rate, note: `หักเหมา ${Math.round(rate * 100)}%` };
   });
   const expenseTotal = expenses.reduce((s, e) => s + e.expense, 0);
   const afterExpenses = Math.max(0, assessable - expenseTotal);
