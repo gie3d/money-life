@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { addTaxIncome, deleteTaxIncome, saveTaxDeductionValues, saveTaxIncomeValues, updateTaxIncome } from "@/app/actions/tax";
 import ConfirmDelete from "./ConfirmDelete";
 import Info from "./Info";
@@ -372,14 +372,6 @@ function Change({ now, then }: { now: number; then: number }) {
   return <span className={`num text-xs font-semibold ${diff > 0 ? "text-miss-text" : "text-go-text"}`}>{diff > 0 ? "+" : "−"}{THB(Math.abs(diff))} จากตอนเปิดหน้า</span>;
 }
 
-/** The next bracket down, and how much more deduction would reach it. */
-function nextDown(r: TaxResult) {
-  const at = r.brackets.findLastIndex((b) => b.taxed > 0);
-  if (at <= 0 || r.minimumApplies) return null;
-  const b = r.brackets[at];
-  return { rate: r.brackets[at - 1].rate, need: r.net - b.from };
-}
-
 function Rates({ r }: { r: TaxResult }) {
   const top = r.brackets.findLastIndex((b) => b.taxed > 0);
   return (
@@ -392,8 +384,12 @@ function Rates({ r }: { r: TaxResult }) {
           const size = b.upTo === null ? Math.max(b.taxed, 1) : b.upTo - b.from;
           const fill = Math.min(1, b.taxed / size);
           const on = i === top;
+          // In the top bracket reached: what is in it is how much more can be deducted at its rate before net income
+          // drops to the bracket below. Not with the minimum tax, which deductions don't change.
+          const room = on && i > 0 && !r.minimumApplies ? b.taxed : 0;
           return (
-            <tr key={b.from} className={b.taxed > 0 ? "" : "text-ink-3"}>
+            <Fragment key={b.from}>
+            <tr className={b.taxed > 0 ? "" : "text-ink-3"}>
               <td className="py-1 pr-2">
                 <span className={`num block text-xs ${on ? "font-bold text-ink" : ""}`}>{range(b)}</span>
                 <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
@@ -403,6 +399,17 @@ function Rates({ r }: { r: TaxResult }) {
               <td className={`num py-1 text-right text-xs ${on ? "font-bold" : ""}`}>{b.rate === 0 ? "0%" : `${Math.round(b.rate * 100)}%`}</td>
               <td className="num py-1 text-right text-xs">{b.taxed > 0 ? k(Math.round(b.tax)) : "—"}</td>
             </tr>
+            {room > 0 && (
+              <tr>
+                <td colSpan={3} className="pb-1.5">
+                  <p className="rounded-lg bg-brand-soft px-2.5 py-1.5 text-[11px] leading-snug text-ink-2">
+                    ลดหย่อนได้อีก <span className="num font-bold text-brand">{k(Math.round(room))}</span> บาทในขั้นนี้
+                    ประหยัดภาษี <span className="num font-bold">{k(Math.round(b.tax))}</span> บาท แล้วจะลงไปขั้น {Math.round(r.brackets[i - 1].rate * 100)}%
+                  </p>
+                </td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
       </tbody>
@@ -411,7 +418,6 @@ function Rates({ r }: { r: TaxResult }) {
 }
 
 function Panel({ r, opened, status }: { r: TaxResult; opened: TaxResult; status: Status }) {
-  const down = nextDown(r);
   return (
     <section className="card space-y-4 p-5">
       <div className="flex items-center justify-between gap-2">
@@ -441,7 +447,6 @@ function Panel({ r, opened, status }: { r: TaxResult; opened: TaxResult; status:
       <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
         ภาษีคิดเป็น {(r.effectiveRate * 100).toFixed(2)}% ของเงินได้ อัตราสูงสุดที่ใช้ {Math.round(r.marginal * 100)}%
         {r.marginal > 0 && !r.minimumApplies && <> ลดหย่อนเพิ่มทุก 1,000 บาท ประหยัดภาษีได้ {k(r.marginal * 1000)} บาท</>}
-        {down && <> ลดหย่อนเพิ่มอีก {THB(down.need)} เงินได้สุทธิจะลงมาอยู่ขั้น {Math.round(down.rate * 100)}%</>}
       </p>
     </section>
   );

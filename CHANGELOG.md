@@ -25,8 +25,8 @@ in `package.json` to match.
 - **Your tax** panel stays in view (beside the steps on a wide screen; at the bottom of a phone screen, tap Rates to
   open it): income, expenses, deductions, net income, then the progressive rates with a bar showing how full each
   bracket is and the top one marked, the tax due, and what is left to pay or comes back. It shows how much the tax
-  has changed since you opened the page, what each 1,000 more of deductions saves, and how much more would bring
-  net income down to the next lower bracket.
+  has changed since you opened the page and what each 1,000 more of deductions saves. Under the bracket you are in,
+  it says how much more you can deduct at that rate, the tax that would save, and the bracket you would drop to.
 - Step 2 has tabs: ค่าใช้จ่าย, ครอบครัว, ประกัน, เงินออมและการลงทุน, ที่อยู่อาศัยและกระตุ้นเศรษฐกิจ and เงินบริจาค, each showing
   what it takes off. A field whose limit cuts what you typed shows what is actually deducted.
 - Amount fields on the Tax pages take a **sum**: type `15000*6` (or `x`, `×`, `+`, `-`, `/`, brackets) and a moment
