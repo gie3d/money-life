@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from "react";
+import { flushSync } from "react-dom";
 
 /** Groups the whole part in thousands as you type: "1234567.5" becomes "1,234,567.5". Keeps a trailing "." and the decimals as typed. */
 export function group(raw: string): string {
@@ -12,23 +13,78 @@ export function group(raw: string): string {
   return `${grouped || "0"}.${cleaned.slice(dot + 1).replace(/\./g, "")}`;
 }
 
+/**
+ * Works out a sum typed in a field: + − × ÷ and brackets ("15000*6", "1,200 x 12", "(500+250)*4"). Commas are
+ * ignored; x and × multiply, ÷ divides. Null when it isn't a whole, valid sum. No eval: a small parser.
+ */
+export function calc(text: string): number | null {
+  const t = text.replace(/,/g, "").replace(/[x×X]/g, "*").replace(/÷/g, "/").replace(/[−–]/g, "-").replace(/\s+/g, "");
+  let i = 0;
+  const sum = (): number => {
+    let v = product();
+    while (t[i] === "+" || t[i] === "-") { const op = t[i++]; const r = product(); v = op === "+" ? v + r : v - r; }
+    return v;
+  };
+  const product = (): number => {
+    let v = factor();
+    while (t[i] === "*" || t[i] === "/") { const op = t[i++]; const r = factor(); v = op === "*" ? v * r : v / r; }
+    return v;
+  };
+  const factor = (): number => {
+    if (t[i] === "-") { i++; return -factor(); }
+    if (t[i] === "+") { i++; return factor(); }
+    if (t[i] === "(") { i++; const v = sum(); if (t[i++] !== ")") return NaN; return v; }
+    const m = /^(\d+\.?\d*|\.\d+)/.exec(t.slice(i));
+    if (!m) return NaN;
+    i += m[0].length;
+    return Number(m[0]);
+  };
+  if (!t) return null;
+  const v = sum();
+  return i === t.length && Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+}
+
+/** How long typing pauses before a sum is worked out. */
+const CALC_AFTER_MS = 800;
+
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue" | "onChange" | "type"> & {
   /** Pass `value` and `onValueChange` to control it. Both are plain numbers as text, without commas. */
   value?: string;
   defaultValue?: string;
   onValueChange?: (raw: string) => void;
+  /** Lets a sum be typed ("15000*6"): it is worked out once typing pauses, or on leaving the field or Enter. */
+  math?: boolean;
 };
 
 /**
  * A text field for amounts that shows thousands separators while you type. What is submitted keeps the
- * commas (the server ignores them); `onValueChange` receives the number without them.
+ * commas (the server ignores them); `onValueChange` receives the number without them. With `math`, a sum can be
+ * typed and is replaced by its result.
  */
-export default function NumberInput({ value, defaultValue = "", onValueChange, ...rest }: Props) {
+export default function NumberInput({ value, defaultValue = "", onValueChange, math = false, onBlur, onKeyDown, ...rest }: Props) {
   const [inner, setInner] = useState(defaultValue);
+  // A sum being typed, shown as typed until it is worked out.
+  const [sum, setSum] = useState<string | null>(null);
+  // A sum that didn't work out when left: marked until it is changed.
+  const [bad, setBad] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ref = useRef<HTMLInputElement>(null);
   const caret = useRef<number | null>(null);
   const controlled = value !== undefined;
-  const shown = group(controlled ? value : inner);
+  const shown = sum ?? group(controlled ? value : inner);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  /** Puts the result of the sum in the field; a sum that doesn't work out stays as typed. */
+  const work = (text: string) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const v = calc(text);
+    if (v === null) { setBad(true); return; }
+    const raw = String(v);
+    setSum(null);
+    if (!controlled) setInner(raw);
+    onValueChange?.(raw);
+  };
 
   // A form reset (after a successful save) puts back the starting value.
   useEffect(() => {
@@ -54,8 +110,26 @@ export default function NumberInput({ value, defaultValue = "", onValueChange, .
       inputMode="decimal"
       autoComplete="off"
       value={shown}
+      aria-invalid={bad || undefined}
+      title={bad ? "This sum doesn't work out" : rest.title}
+      onBlur={(e) => { if (sum !== null) work(sum); onBlur?.(e); }}
+      onKeyDown={(e) => {
+        // Enter submits the form: work the sum out first, so the number is what gets sent.
+        if (e.key === "Enter" && sum !== null) flushSync(() => work(sum));
+        onKeyDown?.(e);
+      }}
       onChange={(e) => {
         const el = e.target;
+        setBad(false);
+        // Anything besides digits, commas and a dot is a sum: keep it as typed and work it out after a pause.
+        if (math && /[^0-9.,\s]/.test(el.value)) {
+          const text = el.value.replace(/[^0-9.,+\-*/xX×÷()\s−–]/g, "");
+          setSum(text);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => work(text), CALC_AFTER_MS);
+          return;
+        }
+        if (sum !== null) { setSum(null); if (timer.current) { clearTimeout(timer.current); timer.current = null; } }
         const before = el.value.slice(0, el.selectionStart ?? el.value.length);
         const significant = before.replace(/[^0-9.]/g, "").length; // digits and the dot, not the commas
         const raw = group(el.value).replace(/,/g, "");

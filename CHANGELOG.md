@@ -29,6 +29,9 @@ in `package.json` to match.
   net income down to the next lower bracket.
 - Step 2 has tabs: ค่าใช้จ่าย, ครอบครัว, ประกัน, เงินออมและการลงทุน, ที่อยู่อาศัยและกระตุ้นเศรษฐกิจ and เงินบริจาค, each showing
   what it takes off. A field whose limit cuts what you typed shows what is actually deducted.
+- Amount fields on the Tax pages take a **sum**: type `15000*6` (or `x`, `×`, `+`, `-`, `/`, brackets) and a moment
+  after you stop typing it becomes 90,000 and the tax updates. Leaving the field or pressing Enter works it out at once;
+  a sum that doesn't work out gets a red border.
 - The limits follow the tax year: social security up to 9,000 to 2025 and 10,500 from 2026, Easy e-Receipt 50,000 in
   2024 and 2025 (none announced for 2026), SSF only to 2024, Thai ESG 300,000 to 2026.
 
