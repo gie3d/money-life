@@ -10,7 +10,12 @@ export default function Markdown({ children }: { children: string }) {
     <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        components={{ a: ({ href, title, children }) => <a href={href} title={title} target="_blank" rel="noopener noreferrer">{children}</a> }}
+        components={{
+          a: ({ href, title, children }) =>
+            href?.startsWith("/") && !href.startsWith("//")
+              ? <a href={href} title={title}>{children}</a>
+              : <a href={href} title={title} target="_blank" rel="noopener noreferrer">{children}</a>,
+        }}
       >
         {children}
       </ReactMarkdown>
