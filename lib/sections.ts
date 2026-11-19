@@ -34,6 +34,7 @@ export const SECTIONS: { id: SectionId; href: string; label: string; pages: SubP
       { href: "/goals", label: "Goals", hint: "Saving toward a target" },
       { href: "/plans", label: "Plans", hint: "Paying for something" },
       { href: "/bills", label: "Bills", hint: "Paying every month" },
+      { href: "/tax", label: "Tax", hint: "Income tax, by year" },
     ],
   },
   // Not a tab group: on a phone it isn't in the bottom bar but behind a small button (see Nav).

@@ -4,6 +4,23 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match.
 
+## [1.8.0] - 2026-11-19
+
+### Tax
+- New **Tax** page under Future: work out your Thai personal income tax for a year. Plans are grouped by tax year,
+  and you can keep as many as you like for the same year to compare (the lowest is marked). **Duplicate** copies a
+  plan with everything in it, to try something different.
+- Each plan has three steps. **1 Income**: what you earned, by type under Section 40 (salary, freelance fees,
+  royalties, interest and dividends, rent, liberal professions, contract work, business), with the tax withheld on
+  each. **2 Expenses and deductions**: expenses are worked out for you by type (50% up to 100,000 for salary and fees,
+  the standard rates for rent, professions and business, or your actual expenses), and you type each deduction as
+  paid: family, insurance, social security, PVD, RMF, pension insurance, Thai ESG, home loan interest, Easy e-Receipt
+  and donations. **3 How the tax is worked out**: every deduction with its limit applied (including the 500,000 cap
+  on retirement savings together), net income, the tax in each bracket, the 0.5% minimum tax where it applies, and
+  what is left to pay or comes back.
+- The limits follow the tax year: social security up to 9,000 to 2025 and 10,500 from 2026, Easy e-Receipt 50,000 in
+  2024 and 2025 (none announced for 2026), SSF only to 2024, Thai ESG 300,000 to 2026.
+
 ## [1.7.0] - 2026-11-18
 
 ### Home
