@@ -18,7 +18,8 @@ in `package.json` to match.
   and donations. **3 How the tax is worked out**: every deduction with its limit applied (including the 500,000 cap
   on retirement savings together), net income, the tax in each bracket, the 0.5% minimum tax where it applies, and
   what is left to pay or comes back.
-- Step 2 (ค่าใช้จ่ายและค่าลดหย่อน) is in Thai: every deduction field, its limit and the expense notes.
+- The Tax pages are in Thai: labels, steps, the rates panel, notes, dialogs and error messages. Tax years show in
+  พ.ศ. (with ค.ศ. beside them).
 - The plan page works out the tax **as you type**: change an income amount, the tax withheld, or any deduction and
   every figure updates at once. Changes save on their own a moment after you stop typing ("All changes saved").
 - **Your tax** panel stays in view (beside the steps on a wide screen; at the bottom of a phone screen, tap Rates to

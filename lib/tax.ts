@@ -13,29 +13,29 @@ export type IncomeType = "40_1" | "40_2" | "40_3" | "40_4" | "40_5" | "40_6" | "
 
 /** The standard expense rate of each kind of income, where a type has more than one. */
 export const INCOME_TYPES: { id: IncomeType; label: string; th: string; hint: string; kinds?: { id: string; label: string; rate: number }[]; actual?: boolean }[] = [
-  { id: "40_1", label: "Salary and wages", th: "เงินเดือน ค่าจ้าง โบนัส", hint: "From an employer: salary, bonus, allowances. 40(1)." },
-  { id: "40_2", label: "Fees and commissions", th: "ค่าธรรมเนียม ค่านายหน้า", hint: "Freelance work, a director's fee, commission. 40(2)." },
-  { id: "40_3", label: "Royalties", th: "ค่าลิขสิทธิ์", hint: "Copyright, goodwill, royalties. 40(3)." },
-  { id: "40_4", label: "Interest and dividends", th: "ดอกเบี้ย เงินปันผล", hint: "No expense deduction. Usually taxed at source instead (15% / 10%); tick that to leave it out. 40(4)." },
+  { id: "40_1", label: "เงินเดือน ค่าจ้าง โบนัส", th: "Salary and wages", hint: "เงินได้จากการจ้างแรงงาน เช่น เงินเดือน โบนัส เบี้ยเลี้ยง" },
+  { id: "40_2", label: "ค่าธรรมเนียม ค่านายหน้า รับจ้างทั่วไป", th: "Fees and commissions", hint: "งานฟรีแลนซ์ เบี้ยประชุมกรรมการ ค่านายหน้า" },
+  { id: "40_3", label: "ค่าลิขสิทธิ์ ค่าแห่งกู๊ดวิลล์", th: "Royalties", hint: "ค่าลิขสิทธิ์ ค่าแห่งกู๊ดวิลล์ เงินปีหรือเงินได้ที่จ่ายเป็นรายปี" },
+  { id: "40_4", label: "ดอกเบี้ย เงินปันผล", th: "Interest and dividends", hint: "หักค่าใช้จ่ายไม่ได้ ส่วนใหญ่ถูกหักภาษี ณ ที่จ่ายแล้ว (ดอกเบี้ย 15% เงินปันผล 10%) เลือกไม่นำมารวมคำนวณได้" },
   {
-    id: "40_5", label: "Rent", th: "ค่าเช่าทรัพย์สิน", hint: "Renting out property. 40(5).", actual: true,
+    id: "40_5", label: "ค่าเช่าทรัพย์สิน", th: "Rent", hint: "ให้เช่าบ้าน อาคาร ที่ดิน ยานพาหนะ หรือทรัพย์สินอื่น", actual: true,
     kinds: [
-      { id: "building", label: "House, building or condo (30%)", rate: 0.3 },
-      { id: "farmland", label: "Farmland (20%)", rate: 0.2 },
-      { id: "land", label: "Other land (15%)", rate: 0.15 },
-      { id: "vehicle", label: "Vehicle (30%)", rate: 0.3 },
-      { id: "other", label: "Anything else (10%)", rate: 0.1 },
+      { id: "building", label: "บ้าน อาคาร คอนโด (30%)", rate: 0.3 },
+      { id: "farmland", label: "ที่ดินเพื่อการเกษตร (20%)", rate: 0.2 },
+      { id: "land", label: "ที่ดินที่ไม่ใช้ในการเกษตร (15%)", rate: 0.15 },
+      { id: "vehicle", label: "ยานพาหนะ (30%)", rate: 0.3 },
+      { id: "other", label: "ทรัพย์สินอื่น (10%)", rate: 0.1 },
     ],
   },
   {
-    id: "40_6", label: "Liberal professions", th: "วิชาชีพอิสระ", hint: "Medicine, law, engineering, architecture, accounting, fine arts. 40(6).", actual: true,
+    id: "40_6", label: "วิชาชีพอิสระ", th: "Liberal professions", hint: "การประกอบโรคศิลปะ กฎหมาย วิศวกรรม สถาปัตยกรรม การบัญชี ประณีตศิลปกรรม", actual: true,
     kinds: [
-      { id: "medical", label: "Medicine (60%)", rate: 0.6 },
-      { id: "other", label: "Law, engineering, architecture, accounting, fine arts (30%)", rate: 0.3 },
+      { id: "medical", label: "การประกอบโรคศิลปะ (60%)", rate: 0.6 },
+      { id: "other", label: "กฎหมาย วิศวกรรม สถาปัตยกรรม บัญชี ประณีตศิลปกรรม (30%)", rate: 0.3 },
     ],
   },
-  { id: "40_7", label: "Contract work", th: "รับเหมา", hint: "Contracting where you supply the materials. 60%. 40(7).", actual: true },
-  { id: "40_8", label: "Business and other", th: "ธุรกิจ การค้า อื่นๆ", hint: "Trading, online selling, other business. 60% for most kinds. 40(8).", actual: true },
+  { id: "40_7", label: "รับเหมาก่อสร้าง", th: "Contract work", hint: "รับเหมาที่ผู้รับเหมาจัดหาสัมภาระเอง หักเหมา 60%", actual: true },
+  { id: "40_8", label: "ธุรกิจ การค้า และเงินได้อื่น", th: "Business and other", hint: "ค้าขาย ขายของออนไลน์ ธุรกิจอื่น ส่วนใหญ่หักเหมา 60%", actual: true },
 ];
 
 export const incomeType = (id: IncomeType) => INCOME_TYPES.find((t) => t.id === id)!;
@@ -230,24 +230,24 @@ export function calculate(year: number, incomes: TaxIncome[], d: Deductions): Ta
   const add = (key: string, label: string, claimed: number, allowed: number, note?: string) => {
     if (claimed > 0 || allowed > 0) lines.push({ key, label, claimed, allowed: Math.max(0, allowed), note });
   };
-  add("personal", "Personal allowance", 60_000, 60_000);
-  if (d.spouse) add("spouse", "Spouse with no income", 60_000, 60_000);
+  add("personal", "ค่าลดหย่อนส่วนตัว", 60_000, 60_000);
+  if (d.spouse) add("spouse", "คู่สมรสไม่มีเงินได้", 60_000, 60_000);
   const kids = d.childrenBefore2018 + d.childrenFrom2018;
   // A child born in 2018 or later who is a second or later child counts 60,000 instead of 30,000.
   const extra = d.childrenBefore2018 > 0 ? d.childrenFrom2018 : Math.max(0, d.childrenFrom2018 - 1);
-  if (kids > 0) add("children", `Children (${kids})`, kids * 30_000 + extra * 30_000, kids * 30_000 + extra * 30_000, extra > 0 ? `30,000 each, 60,000 for ${extra} born 2018 or later as a second child or later` : "30,000 each");
+  if (kids > 0) add("children", `บุตร (${kids} คน)`, kids * 30_000 + extra * 30_000, kids * 30_000 + extra * 30_000, extra > 0 ? `คนละ 30,000 บาท บุตรคนที่ 2 ขึ้นไปที่เกิดตั้งแต่ปี 2561 อีก ${extra} คน คนละ 60,000 บาท` : "คนละ 30,000 บาท");
   const parents = Math.min(d.parents, 4);
-  if (parents > 0) add("parents", `Parents (${parents})`, parents * 30_000, parents * 30_000, "30,000 each, up to 4");
-  if (d.disabled > 0) add("disabled", `Disabled dependants (${d.disabled})`, d.disabled * 60_000, d.disabled * 60_000, "60,000 each");
-  add("prenatal", "Pregnancy and childbirth", d.prenatal, Math.min(d.prenatal, 60_000), "Up to 60,000 a pregnancy");
-  add("socialSecurity", "Social security", d.socialSecurity, Math.min(d.socialSecurity, rules.socialSecurityCap), `Up to ${rules.socialSecurityCap.toLocaleString("en-US")} in ${year}`);
+  if (parents > 0) add("parents", `บิดามารดา (${parents} คน)`, parents * 30_000, parents * 30_000, "คนละ 30,000 บาท สูงสุด 4 คน");
+  if (d.disabled > 0) add("disabled", `ผู้พิการหรือทุพพลภาพ (${d.disabled} คน)`, d.disabled * 60_000, d.disabled * 60_000, "คนละ 60,000 บาท");
+  add("prenatal", "ค่าฝากครรภ์และค่าคลอดบุตร", d.prenatal, Math.min(d.prenatal, 60_000), "ไม่เกิน 60,000 บาทต่อการตั้งครรภ์");
+  add("socialSecurity", "เงินสมทบประกันสังคม", d.socialSecurity, Math.min(d.socialSecurity, rules.socialSecurityCap), `ไม่เกิน ${rules.socialSecurityCap.toLocaleString("en-US")} บาท ในปีภาษี ${year + 543}`);
 
   const life = Math.min(d.lifeInsurance, 100_000);
   const health = Math.min(d.healthInsurance, 25_000, 100_000 - life);
-  add("lifeInsurance", "Life insurance", d.lifeInsurance, life, "Up to 100,000, together with health insurance");
-  add("healthInsurance", "Health insurance", d.healthInsurance, health, "Up to 25,000; life and health together up to 100,000");
-  add("spouseLifeInsurance", "Spouse's life insurance", d.spouseLifeInsurance, d.spouse ? Math.min(d.spouseLifeInsurance, 10_000) : 0, d.spouse ? "Up to 10,000" : "Only with a spouse with no income");
-  add("parentsHealthInsurance", "Parents' health insurance", d.parentsHealthInsurance, Math.min(d.parentsHealthInsurance, 15_000), "Up to 15,000");
+  add("lifeInsurance", "เบี้ยประกันชีวิต", d.lifeInsurance, life, "ไม่เกิน 100,000 บาท รวมกับประกันสุขภาพ");
+  add("healthInsurance", "เบี้ยประกันสุขภาพ", d.healthInsurance, health, "ไม่เกิน 25,000 บาท รวมกับประกันชีวิตไม่เกิน 100,000 บาท");
+  add("spouseLifeInsurance", "เบี้ยประกันชีวิตคู่สมรส", d.spouseLifeInsurance, d.spouse ? Math.min(d.spouseLifeInsurance, 10_000) : 0, d.spouse ? "ไม่เกิน 10,000 บาท" : "ใช้ได้เฉพาะคู่สมรสที่ไม่มีเงินได้");
+  add("parentsHealthInsurance", "เบี้ยประกันสุขภาพบิดามารดา", d.parentsHealthInsurance, Math.min(d.parentsHealthInsurance, 15_000), "ไม่เกิน 15,000 บาท");
 
   // Retirement savings: each has its own cap, and together they stop at 500,000.
   const pension = Math.min(d.pensionInsurance, assessable * 0.15, 200_000);
@@ -260,15 +260,15 @@ export function calculate(year: number, incomes: TaxIncome[], d: Deductions): Ta
   let cut = retirementCut;
   const trim = (n: number) => { const t = Math.min(n, cut); cut -= t; return n - t; };
   const [rmfOk, ssfOk, pvdOk, pensionOk] = [trim(rmf), trim(ssf), trim(pvd), trim(pension)];
-  add("pensionInsurance", "Pension insurance", d.pensionInsurance, pensionOk, "15% of income, up to 200,000");
-  add("providentFund", "Provident fund (PVD / GPF)", d.providentFund, pvdOk, "15% of salary, up to 500,000");
-  add("rmf", "RMF", d.rmf, rmfOk, "30% of income, up to 500,000");
-  add("ssf", "SSF", d.ssf, ssfOk, rules.ssfCap > 0 ? `30% of income, up to ${rules.ssfCap.toLocaleString("en-US")}` : `Not deductible for ${year}: SSF purchases counted up to 2024`);
-  add("thaiEsg", "Thai ESG", d.thaiEsg, Math.min(d.thaiEsg, assessable * 0.3, rules.thaiEsgCap), `30% of income, up to ${rules.thaiEsgCap.toLocaleString("en-US")}; outside the 500,000 cap`);
+  add("pensionInsurance", "เบี้ยประกันชีวิตแบบบำนาญ", d.pensionInsurance, pensionOk, "15% ของเงินได้ ไม่เกิน 200,000 บาท");
+  add("providentFund", "กองทุนสำรองเลี้ยงชีพ / กบข.", d.providentFund, pvdOk, "15% ของค่าจ้าง ไม่เกิน 500,000 บาท");
+  add("rmf", "กองทุน RMF", d.rmf, rmfOk, "30% ของเงินได้ ไม่เกิน 500,000 บาท");
+  add("ssf", "กองทุน SSF", d.ssf, ssfOk, rules.ssfCap > 0 ? `30% ของเงินได้ ไม่เกิน ${rules.ssfCap.toLocaleString("en-US")} บาท` : `ใช้ลดหย่อนปีภาษี ${year + 543} ไม่ได้ (เฉพาะที่ซื้อถึงปี 2567)`);
+  add("thaiEsg", "กองทุน Thai ESG", d.thaiEsg, Math.min(d.thaiEsg, assessable * 0.3, rules.thaiEsgCap), `30% ของเงินได้ ไม่เกิน ${rules.thaiEsgCap.toLocaleString("en-US")} บาท ไม่รวมในเพดาน 500,000 บาท`);
 
-  add("homeLoanInterest", "Home loan interest", d.homeLoanInterest, Math.min(d.homeLoanInterest, 100_000), "Up to 100,000");
-  add("easyEReceipt", "Easy e-Receipt", d.easyEReceipt, Math.min(d.easyEReceipt, rules.easyEReceiptCap), rules.easyEReceiptNote);
-  add("politicalDonation", "Donation to a political party", d.politicalDonation, Math.min(d.politicalDonation, 10_000), "Up to 10,000");
+  add("homeLoanInterest", "ดอกเบี้ยเงินกู้ซื้อที่อยู่อาศัย", d.homeLoanInterest, Math.min(d.homeLoanInterest, 100_000), "ไม่เกิน 100,000 บาท");
+  add("easyEReceipt", "Easy e-Receipt", d.easyEReceipt, Math.min(d.easyEReceipt, rules.easyEReceiptCap), rules.easyEReceiptNoteTh);
+  add("politicalDonation", "บริจาคพรรคการเมือง", d.politicalDonation, Math.min(d.politicalDonation, 10_000), "ไม่เกิน 10,000 บาท");
 
   const allowanceTotal = Math.min(afterExpenses, lines.reduce((s, l) => s + l.allowed, 0));
   const beforeDonations = afterExpenses - allowanceTotal;
@@ -278,8 +278,8 @@ export function calculate(year: number, incomes: TaxIncome[], d: Deductions): Ta
   const double = Math.min(d.donationDouble * 2, beforeDonations * 0.1);
   const general = Math.min(d.donationGeneral, (beforeDonations - double) * 0.1);
   const donations: Line[] = [];
-  if (d.donationDouble > 0) donations.push({ key: "donationDouble", label: "Education, state hospitals, Thai Red Cross (×2)", claimed: d.donationDouble, allowed: double, note: "Twice the amount, up to 10% of income after allowances" });
-  if (d.donationGeneral > 0) donations.push({ key: "donationGeneral", label: "Other donations", claimed: d.donationGeneral, allowed: Math.max(0, general), note: "Up to 10% of income after allowances and the donations above" });
+  if (d.donationDouble > 0) donations.push({ key: "donationDouble", label: "บริจาคเพื่อการศึกษา โรงพยาบาลรัฐ สภากาชาดไทย (2 เท่า)", claimed: d.donationDouble, allowed: double, note: "หักได้ 2 เท่า ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อน" });
+  if (d.donationGeneral > 0) donations.push({ key: "donationGeneral", label: "เงินบริจาคทั่วไป", claimed: d.donationGeneral, allowed: Math.max(0, general), note: "ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อนและเงินบริจาคข้างต้น" });
   const donationTotal = donations.reduce((s, l) => s + l.allowed, 0);
 
   const net = Math.max(0, beforeDonations - donationTotal);

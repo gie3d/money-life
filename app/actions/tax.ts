@@ -23,8 +23,8 @@ async function ownPlan(userId: number, planId: number) {
 function readPlan(form: FormData) {
   const year = Number(form.get("year"));
   const name = String(form.get("name") ?? "").trim();
-  if (!(Number.isInteger(year) && year >= 2000 && year <= 2100)) return { error: "Pick the tax year." };
-  if (!name || name.length > 80) return { error: "Give the plan a name of 1 to 80 characters." };
+  if (!(Number.isInteger(year) && year >= 2000 && year <= 2100)) return { error: "เลือกปีภาษี" };
+  if (!name || name.length > 80) return { error: "ตั้งชื่อแผน ไม่เกิน 80 ตัวอักษร" };
   return { year, name };
 }
 
@@ -42,7 +42,7 @@ export async function updateTaxPlan(planId: number, _: TaxState, form: FormData)
   const p = readPlan(form);
   if ("error" in p) return p;
   const { rowCount } = await pool.query("UPDATE tax_plans SET year = $3, name = $4 WHERE id = $1 AND user_id = $2", [planId, user.id, p.year, p.name]);
-  if (!rowCount) return { error: "That plan no longer exists." };
+  if (!rowCount) return { error: "ไม่พบแผนนี้แล้ว" };
   revalidatePath("/tax", "layout");
   return { saved: true };
 }
@@ -56,7 +56,7 @@ export async function duplicateTaxPlan(planId: number) {
     await client.query("BEGIN");
     const { rows } = await client.query(
       `INSERT INTO tax_plans (user_id, year, name, deductions, notes)
-       SELECT user_id, year, left(name || ' (copy)', 80), deductions, notes FROM tax_plans WHERE id = $1 AND user_id = $2 RETURNING id`,
+       SELECT user_id, year, left(name || ' (สำเนา)', 80), deductions, notes FROM tax_plans WHERE id = $1 AND user_id = $2 RETURNING id`,
       [planId, user.id],
     );
     if (!rows[0]) { await client.query("ROLLBACK"); return; }
@@ -86,7 +86,7 @@ export async function deleteTaxPlan(planId: number) {
 
 function readIncome(form: FormData) {
   const type = String(form.get("type") ?? "") as IncomeType;
-  if (!INCOME_TYPES.some((t) => t.id === type)) return { error: "Pick the type of income." };
+  if (!INCOME_TYPES.some((t) => t.id === type)) return { error: "เลือกประเภทเงินได้" };
   const t = incomeType(type);
   const name = String(form.get("name") ?? "").trim() || t.label;
   const amount = num(form.get("amount"));
@@ -96,16 +96,16 @@ function readIncome(form: FormData) {
   const useActual = t.actual && form.get("expense_mode") === "actual";
   const actualExpense = useActual ? num(form.get("actual_expense")) : null;
   const separate = type === "40_4" && form.get("separate") === "on";
-  if (name.length > 80) return { error: "Keep the name under 80 characters." };
-  if (!(amount > 0)) return { error: "Enter the income for the year, more than zero." };
-  if (!(withheld >= 0)) return { error: "Tax withheld must be zero or more." };
-  if (actualExpense !== null && !(actualExpense >= 0)) return { error: "Actual expenses must be zero or more." };
+  if (name.length > 80) return { error: "ชื่อต้องไม่เกิน 80 ตัวอักษร" };
+  if (!(amount > 0)) return { error: "กรอกเงินได้ทั้งปี มากกว่าศูนย์" };
+  if (!(withheld >= 0)) return { error: "ภาษีหัก ณ ที่จ่ายต้องไม่ติดลบ" };
+  if (actualExpense !== null && !(actualExpense >= 0)) return { error: "ค่าใช้จ่ายจริงต้องไม่ติดลบ" };
   return { type, name, amount, kind, actualExpense, withheld, separate };
 }
 
 export async function addTaxIncome(planId: number, _: TaxState, form: FormData): Promise<TaxState> {
   const user = await requireUser();
-  if (!(await ownPlan(user.id, planId))) return { error: "That plan no longer exists." };
+  if (!(await ownPlan(user.id, planId))) return { error: "ไม่พบแผนนี้แล้ว" };
   const i = readIncome(form);
   if ("error" in i) return i;
   await pool.query(
@@ -126,7 +126,7 @@ export async function updateTaxIncome(incomeId: number, _: TaxState, form: FormD
      FROM tax_plans p WHERE t.id = $1 AND p.id = t.plan_id AND p.user_id = $2 RETURNING t.plan_id`,
     [incomeId, user.id, i.type, i.name, i.amount, i.kind, i.actualExpense, i.withheld, i.separate],
   );
-  if (!rows[0]) return { error: "That income no longer exists." };
+  if (!rows[0]) return { error: "ไม่พบเงินได้นี้แล้ว" };
   revalidatePath(`/tax/${rows[0].plan_id}`);
   revalidatePath("/tax");
   return { saved: true };
@@ -151,13 +151,13 @@ export async function saveTaxDeductionValues(planId: number, values: Deductions)
   for (const k of Object.keys(NO_DEDUCTIONS)) {
     if (k === "spouse") continue;
     const n = Number(raw[k] ?? 0);
-    if (!(n >= 0)) return { error: "Every amount must be zero or more." };
-    if (["childrenBefore2018", "childrenFrom2018", "parents", "disabled"].includes(k) && !Number.isInteger(n)) return { error: "Count people in whole numbers." };
+    if (!(n >= 0)) return { error: "ทุกจำนวนต้องไม่ติดลบ" };
+    if (["childrenBefore2018", "childrenFrom2018", "parents", "disabled"].includes(k) && !Number.isInteger(n)) return { error: "จำนวนคนต้องเป็นจำนวนเต็ม" };
   }
-  if (Number(raw.parents ?? 0) > 4) return { error: "Up to 4 parents: yours and your spouse's." };
+  if (Number(raw.parents ?? 0) > 4) return { error: "บิดามารดาได้สูงสุด 4 คน (ของตนเองและคู่สมรส)" };
   const d = readDeductions(raw);
   const { rowCount } = await pool.query("UPDATE tax_plans SET deductions = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, JSON.stringify(d)]);
-  if (!rowCount) return { error: "That plan no longer exists." };
+  if (!rowCount) return { error: "ไม่พบแผนนี้แล้ว" };
   revalidatePath("/tax");
   return { saved: true };
 }
@@ -168,14 +168,14 @@ export async function saveTaxIncomeValues(incomeId: number, v: { amount: number;
   const amount = Number(v?.amount);
   const withheld = Number(v?.withheld);
   const actual = v?.actualExpense === null || v?.actualExpense === undefined ? null : Number(v.actualExpense);
-  if (!(amount >= 0) || !(withheld >= 0) || (actual !== null && !(actual >= 0))) return { error: "Amounts must be zero or more." };
+  if (!(amount >= 0) || !(withheld >= 0) || (actual !== null && !(actual >= 0))) return { error: "จำนวนเงินต้องไม่ติดลบ" };
   const { rowCount } = await pool.query(
     `UPDATE tax_incomes t SET amount = $3, withheld = $4,
        actual_expense = CASE WHEN t.actual_expense IS NULL THEN NULL ELSE $5::numeric END
      FROM tax_plans p WHERE t.id = $1 AND p.id = t.plan_id AND p.user_id = $2`,
     [incomeId, user.id, amount, withheld, actual ?? 0],
   );
-  if (!rowCount) return { error: "That income no longer exists." };
+  if (!rowCount) return { error: "ไม่พบเงินได้นี้แล้ว" };
   revalidatePath("/tax");
   return { saved: true };
 }
@@ -183,8 +183,8 @@ export async function saveTaxIncomeValues(incomeId: number, v: { amount: number;
 export async function updateTaxNotes(planId: number, _: TaxState, form: FormData): Promise<TaxState> {
   const user = await requireUser();
   const notes = String(form.get("notes") ?? "").replace(/\r\n/g, "\n").trim();
-  if (notes.length > 20_000) return { error: "Notes can be up to 20,000 characters." };
+  if (notes.length > 20_000) return { error: "บันทึกได้ไม่เกิน 20,000 ตัวอักษร" };
   const { rowCount } = await pool.query("UPDATE tax_plans SET notes = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, notes || null]);
-  if (!rowCount) return { error: "That plan no longer exists." };
+  if (!rowCount) return { error: "ไม่พบแผนนี้แล้ว" };
   revalidatePath(`/tax/${planId}`);
 }

@@ -13,7 +13,7 @@ import { requireUser } from "@/lib/session";
 export async function generateMetadata({ params }: PageProps<"/tax/[id]">) {
   const user = await requireUser();
   const plan = await getTaxPlan(user.id, Number((await params).id) || 0);
-  return { title: plan ? `Tax ${plan.year} · ${plan.name}` : "Tax" };
+  return { title: plan ? `ภาษี ${plan.year + 543} · ${plan.name}` : "ภาษี" };
 }
 
 export default async function TaxPlanPage({ params }: PageProps<"/tax/[id]">) {
@@ -28,38 +28,38 @@ export default async function TaxPlanPage({ params }: PageProps<"/tax/[id]">) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-      <Breadcrumb items={[{ label: "Tax", href: "/tax" }, { label: String(plan.year) }, { label: plan.name }]} />
+      <Breadcrumb items={[{ label: "ภาษี", href: "/tax" }, { label: `ปีภาษี ${plan.year + 543}` }, { label: plan.name }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-3xl">
             {plan.name}
             <EditTaxPlanButton save={updateTaxPlan.bind(null, plan.id)} year={plan.year} name={plan.name} years={years} />
           </h1>
-          <p className="text-sm text-ink-3">Tax year {plan.year} (พ.ศ. {plan.year + 543}) · income Jan 1 – Dec 31, {plan.year} · file ภ.ง.ด.90/91 by Mar 31, {plan.year + 1}</p>
+          <p className="text-sm text-ink-3">ปีภาษี {plan.year + 543} (ค.ศ. {plan.year}) · เงินได้ 1 ม.ค. – 31 ธ.ค. {plan.year + 543} · ยื่น ภ.ง.ด.90/91 ภายใน 31 มี.ค. {plan.year + 544}</p>
         </div>
         <div className="flex items-center gap-2">
-          <form action={duplicateTaxPlan.bind(null, plan.id)}><button className="btn btn-quiet">Duplicate</button></form>
-          <ConfirmDelete action={deleteTaxPlan.bind(null, plan.id)} title="Delete this tax plan?" message={`“${plan.name}” and its incomes and deductions will be gone.`} triggerClassName="btn btn-quiet">
-            Delete
+          <form action={duplicateTaxPlan.bind(null, plan.id)}><button className="btn btn-quiet">ทำสำเนา</button></form>
+          <ConfirmDelete action={deleteTaxPlan.bind(null, plan.id)} title="ลบแผนภาษีนี้?" message={`“${plan.name}” รวมทั้งเงินได้และค่าลดหย่อนทั้งหมดจะถูกลบ`} confirmLabel="ลบ" cancelLabel="ยกเลิก" triggerClassName="btn btn-quiet">
+            ลบ
           </ConfirmDelete>
         </div>
       </div>
       {rulesAssumed(plan.year) && (
-        <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">The rules for {plan.year} aren&apos;t known yet: this uses the latest ones, which may change.</p>
+        <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">ยังไม่มีเกณฑ์ของปีภาษี {plan.year + 543} จึงใช้เกณฑ์ล่าสุดที่มี ซึ่งอาจเปลี่ยนแปลงได้</p>
       )}
 
       {plan.notes ? (
         <section className="card p-5 sm:p-6">
           <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="text-lg">Notes</h2>
-            <NotesEditor notes={plan.notes} save={updateTaxNotes.bind(null, plan.id)} />
+            <h2 className="text-lg">บันทึก</h2>
+            <NotesEditor thai notes={plan.notes} save={updateTaxNotes.bind(null, plan.id)} />
           </div>
           <Markdown>{plan.notes}</Markdown>
         </section>
       ) : (
         <div className="flex items-center gap-3 text-sm text-ink-3">
-          <NotesEditor notes={null} save={updateTaxNotes.bind(null, plan.id)} placeholder="Where the numbers come from, documents to keep…" />
-          <span>Keep notes: where the numbers come from, documents to keep (50 ทวิ, receipts).</span>
+          <NotesEditor thai notes={null} save={updateTaxNotes.bind(null, plan.id)} placeholder="ที่มาของตัวเลข เอกสารที่ต้องเก็บ…" />
+          <span>จดบันทึก: ที่มาของตัวเลข เอกสารที่ต้องเก็บ (หนังสือรับรอง 50 ทวิ ใบเสร็จ)</span>
         </div>
       )}
 

@@ -7,7 +7,7 @@ import { calculate, taxYears } from "@/lib/tax";
 import { listTaxIncomes, listTaxPlans } from "@/lib/tax-data";
 import { requireUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Tax" };
+export const metadata: Metadata = { title: "ภาษี" };
 
 const THB = (n: number) => money(n, "THB");
 
@@ -21,10 +21,10 @@ export default async function TaxPage() {
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
       <SectionTabs section="future" current="/tax" />
       <div>
-        <h1 className="text-3xl">Tax</h1>
+        <h1 className="text-3xl">ภาษีเงินได้บุคคลธรรมดา</h1>
         <p className="mt-1 text-sm text-ink-3">
-          Work out your Thai personal income tax for a year: what you earned, what you can deduct, and what is left to pay or comes back.
-          Keep several plans for the same year to compare.
+          คำนวณภาษีเงินได้ของแต่ละปี: เงินได้ ค่าใช้จ่าย ค่าลดหย่อน และภาษีที่ต้องชำระเพิ่มหรือได้คืน
+          สร้างได้หลายแผนในปีเดียวกันเพื่อเปรียบเทียบ
         </p>
       </div>
 
@@ -34,29 +34,29 @@ export default async function TaxPage() {
         return (
           <section key={year} className="space-y-3">
             <h2 className="text-xl">
-              {year} <span className="text-sm font-semibold text-ink-3">พ.ศ. {year + 543} · filed by Mar 31, {year + 1}</span>
+              ปีภาษี {year + 543} <span className="text-sm font-semibold text-ink-3">ค.ศ. {year} · ยื่นแบบภายใน 31 มี.ค. {year + 544}</span>
             </h2>
             <div className="grid gap-4 md:grid-cols-2">
               {mine.map(({ p, r }) => (
                 <Link key={p.id} href={`/tax/${p.id}`} className="card block space-y-3 p-5 sm:p-6">
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="text-lg">{p.name}</h3>
-                    {mine.length > 1 && r.tax === lowest && r.assessable > 0 && <span className="rounded-full bg-go-soft px-2.5 py-0.5 text-xs font-bold text-go-text">Lowest tax</span>}
+                    {mine.length > 1 && r.tax === lowest && r.assessable > 0 && <span className="rounded-full bg-go-soft px-2.5 py-0.5 text-xs font-bold text-go-text">ภาษีต่ำสุด</span>}
                   </div>
                   {r.assessable === 0 ? (
-                    <p className="text-sm text-ink-3">No income yet. Open it to add some.</p>
+                    <p className="text-sm text-ink-3">ยังไม่มีเงินได้ เปิดแผนเพื่อเพิ่ม</p>
                   ) : (
                     <>
                       <div className="grid grid-cols-3 gap-3">
-                        <div><p className="eyebrow">Income</p><p className="num font-bold">{THB(r.assessable)}</p></div>
-                        <div><p className="eyebrow">Net income</p><p className="num font-bold">{THB(r.net)}</p></div>
-                        <div><p className="eyebrow">Tax</p><p className="num font-bold">{THB(r.tax)}</p></div>
+                        <div><p className="eyebrow">เงินได้</p><p className="num font-bold">{THB(r.assessable)}</p></div>
+                        <div><p className="eyebrow">เงินได้สุทธิ</p><p className="num font-bold">{THB(r.net)}</p></div>
+                        <div><p className="eyebrow">ภาษี</p><p className="num font-bold">{THB(r.tax)}</p></div>
                       </div>
                       <p className="text-sm text-ink-3">
-                        {(r.effectiveRate * 100).toFixed(1)}% of income · top rate {Math.round(r.marginal * 100)}% ·{" "}
-                        {r.balance > 0 ? <span className="font-semibold text-ink">{THB(r.balance)} to pay</span>
-                          : r.balance < 0 ? <span className="font-semibold text-go-text">{THB(-r.balance)} back</span>
-                          : "nothing to pay"}
+                        {(r.effectiveRate * 100).toFixed(1)}% ของเงินได้ · อัตราสูงสุด {Math.round(r.marginal * 100)}% ·{" "}
+                        {r.balance > 0 ? <span className="font-semibold text-ink">ชำระเพิ่ม {THB(r.balance)}</span>
+                          : r.balance < 0 ? <span className="font-semibold text-go-text">ได้คืน {THB(-r.balance)}</span>
+                          : "ไม่ต้องชำระเพิ่ม"}
                       </p>
                     </>
                   )}

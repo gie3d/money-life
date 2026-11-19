@@ -107,7 +107,7 @@ export default function TaxWorkspace({ planId, year, incomes: serverIncomes, ded
     timers.current.set(key, setTimeout(async () => {
       timers.current.delete(key);
       let error: string | null = null;
-      try { error = (await save())?.error ?? null; } catch { error = "Couldn't save. Check the connection and try again."; }
+      try { error = (await save())?.error ?? null; } catch { error = "บันทึกไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองใหม่"; }
       setStatus((s) => ({ pending: s.pending - 1, error }));
       if (!timers.current.has(key)) onDone?.();
     }, SAVE_AFTER_MS));
@@ -131,15 +131,15 @@ export default function TaxWorkspace({ planId, year, incomes: serverIncomes, ded
   return (
     <div className="pb-36 lg:grid lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-5 lg:pb-0">
       <div className="space-y-5">
-        <Step n={1} title="Income (เงินได้พึงประเมิน)" sub={`What you earned in ${year}, by type under Section 40 of the Revenue Code. Change an amount and the tax updates as you type.`}>
+        <Step n={1} title="เงินได้พึงประเมิน" sub={`เงินได้ในปีภาษี ${year + 543} แยกตามประเภทเงินได้มาตรา 40 แก้ตัวเลขแล้วภาษีจะเปลี่ยนทันที`}>
           {incomes.length > 0 && (
             <ul className="divide-y divide-line">
               {incomes.map((i) => <IncomeRow key={i.id} income={i} onChange={(p) => setIncome(i.id, p)} />)}
-              <Line label="Total income" value={r.assessable} strong />
+              <Line label="รวมเงินได้" value={r.assessable} strong />
             </ul>
           )}
           <div className={incomes.length > 0 ? "border-t border-line pt-4" : ""}>
-            <h3 className="mb-3 text-sm font-bold">{incomes.length > 0 ? "Add another income" : "Add your income"}</h3>
+            <h3 className="mb-3 text-sm font-bold">{incomes.length > 0 ? "เพิ่มเงินได้อีกรายการ" : "เพิ่มเงินได้"}</h3>
             <TaxIncomeForm save={addTaxIncome.bind(null, planId)} />
           </div>
         </Step>
@@ -190,27 +190,27 @@ function IncomeRow({ income: i, onChange }: { income: TaxIncome; onChange: (p: P
       <span className="w-12 rounded-md bg-surface-2 px-1.5 py-0.5 text-center text-xs font-bold text-ink-2">{typeLabel(i.type)}</span>
       <span className="min-w-0">
         <span className="font-semibold">{i.name}</span>
-        <span className="block text-xs text-ink-3">{incomeType(i.type).label}{i.separate && " · taxed at source, left out"}</span>
+        <span className="block text-xs text-ink-3">{incomeType(i.type).label}{i.separate && " · หัก ณ ที่จ่ายแล้ว ไม่นำมารวม"}</span>
       </span>
       <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-1 sm:block">
-        <span className="text-xs text-ink-3 sm:sr-only">Income</span>
-        <NumberInput aria-label={`Income of ${i.name}`} defaultValue={plainNumber(i.amount)} onValueChange={(v) => onChange({ amount: Number(v) || 0 })} className={`${field} ${i.separate ? "text-ink-3 line-through" : ""}`} />
+        <span className="text-xs text-ink-3 sm:sr-only">เงินได้</span>
+        <NumberInput aria-label={`เงินได้ ${i.name}`} defaultValue={plainNumber(i.amount)} onValueChange={(v) => onChange({ amount: Number(v) || 0 })} className={`${field} ${i.separate ? "text-ink-3 line-through" : ""}`} />
       </label>
       <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-1 sm:block">
-        <span className="text-xs text-ink-3 sm:sr-only">Withheld</span>
-        <NumberInput aria-label={`Tax withheld on ${i.name}`} title="Tax withheld (ภาษีหัก ณ ที่จ่าย)" placeholder="withheld" defaultValue={i.withheld ? plainNumber(i.withheld) : ""} onValueChange={(v) => onChange({ withheld: Number(v) || 0 })} className={field} />
+        <span className="text-xs text-ink-3 sm:sr-only">หัก ณ ที่จ่าย</span>
+        <NumberInput aria-label={`ภาษีหัก ณ ที่จ่าย ${i.name}`} title="ภาษีหัก ณ ที่จ่าย" placeholder="หัก ณ ที่จ่าย" defaultValue={i.withheld ? plainNumber(i.withheld) : ""} onValueChange={(v) => onChange({ withheld: Number(v) || 0 })} className={field} />
       </label>
       <span className="col-start-3 row-start-1 flex items-center sm:col-start-auto sm:row-start-auto">
         <EditTaxIncomeButton save={updateTaxIncome.bind(null, i.id)} income={i} />
-        <ConfirmDelete action={deleteTaxIncome.bind(null, i.id)} title="Delete this income?" message={`“${i.name}” will be taken out of the plan.`}
-          triggerLabel={`Delete ${i.name}`} triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2">
+        <ConfirmDelete action={deleteTaxIncome.bind(null, i.id)} title="ลบเงินได้นี้?" message={`“${i.name}” จะถูกนำออกจากแผน`} confirmLabel="ลบ" cancelLabel="ยกเลิก"
+          triggerLabel={`ลบ ${i.name}`} triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </ConfirmDelete>
       </span>
       {i.actualExpense !== null && (
         <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-2 sm:col-start-3 sm:grid-cols-[auto_8rem] sm:justify-end">
-          <span className="text-xs text-ink-3">Actual expenses</span>
-          <NumberInput aria-label={`Actual expenses of ${i.name}`} defaultValue={plainNumber(i.actualExpense)} onValueChange={(v) => onChange({ actualExpense: Number(v) || 0 })} className={field} />
+          <span className="text-xs text-ink-3">ค่าใช้จ่ายจริง</span>
+          <NumberInput aria-label={`ค่าใช้จ่ายจริง ${i.name}`} defaultValue={plainNumber(i.actualExpense)} onValueChange={(v) => onChange({ actualExpense: Number(v) || 0 })} className={field} />
         </label>
       )}
     </li>
@@ -304,63 +304,63 @@ function DeductionField({ f, d, ctx, line, onChange }: { f: Field; d: Deductions
 /** Step 3: every line with its limit applied, from income to net income, and the minimum tax. */
 function Breakdown({ r }: { r: TaxResult }) {
   return (
-    <Step n={3} title="How the tax is worked out (การคำนวณภาษี)" sub="Income, less expenses, less deductions, gives net income. The rates panel applies the progressive rates to it.">
+    <Step n={3} title="การคำนวณภาษี" sub="เงินได้ หักค่าใช้จ่าย หักค่าลดหย่อน ได้เป็นเงินได้สุทธิ แล้วนำไปคำนวณตามอัตราภาษีขั้นบันได">
       <ul className="divide-y divide-line">
-        <Line label="Income" value={r.assessable} />
-        <Line label="Less expenses" value={r.expenseTotal} minus />
-        <Line label="Income after expenses" value={r.afterExpenses} strong />
+        <Line label="เงินได้พึงประเมิน" value={r.assessable} />
+        <Line label="หัก ค่าใช้จ่าย" value={r.expenseTotal} minus />
+        <Line label="เงินได้หลังหักค่าใช้จ่าย" value={r.afterExpenses} strong />
       </ul>
       <div>
-        <h3 className="mb-1 text-sm font-bold">Deductions allowed</h3>
+        <h3 className="mb-1 text-sm font-bold">ค่าลดหย่อนที่หักได้</h3>
         <ul className="divide-y divide-line">
           {r.allowances.map((l) => (
             <Line key={l.key} value={l.allowed} minus hint={l.note}
-              label={<>{l.label}{l.claimed > l.allowed + 0.005 && <span className="ml-2 text-xs font-semibold text-miss-text">of {THB(l.claimed)}</span>}</>} />
+              label={<>{l.label}{l.claimed > l.allowed + 0.005 && <span className="ml-2 text-xs font-semibold text-miss-text">จากที่กรอก {THB(l.claimed)}</span>}</>} />
           ))}
-          {r.retirementCut > 0 && <li className="py-2 text-xs text-miss-text">Retirement savings were over the 500,000 cap together: {THB(r.retirementCut)} not counted (taken off RMF first).</li>}
-          <Line label="Total deductions" value={r.allowanceTotal} strong minus />
+          {r.retirementCut > 0 && <li className="py-2 text-xs text-miss-text">กองทุนเพื่อการเกษียณรวมกันเกินเพดาน 500,000 บาท ไม่นำมาหัก {THB(r.retirementCut)} (ตัดจาก RMF ก่อน)</li>}
+          <Line label="รวมค่าลดหย่อน" value={r.allowanceTotal} strong minus />
         </ul>
       </div>
       {r.donations.length > 0 && (
         <div>
-          <h3 className="mb-1 text-sm font-bold">Donations</h3>
+          <h3 className="mb-1 text-sm font-bold">เงินบริจาค</h3>
           <ul className="divide-y divide-line">
             {r.donations.map((l) => <Line key={l.key} value={l.allowed} minus hint={l.note} label={l.label} />)}
           </ul>
         </div>
       )}
       <ul className="divide-y divide-line border-t-2 border-ink/20">
-        <Line label="Net income (เงินได้สุทธิ)" value={r.net} strong />
+        <Line label="เงินได้สุทธิ" value={r.net} strong />
       </ul>
       {r.minimumTax !== null && (
         <p className="rounded-xl bg-surface-2 px-4 py-2.5 text-sm text-ink-2">
-          <span className="font-semibold">Minimum tax:</span> income other than salary is {THB(r.otherIncome)}, 120,000 or more, so the tax is also worked out as
-          0.5% of it: {THB(r.minimumTax)}. {r.minimumApplies
-            ? <>That is more than the progressive tax, and over 5,000, so it is the tax due.</>
-            : r.minimumTax <= 5_000 ? <>At 5,000 or less it is waived; the progressive tax applies.</>
-            : <>The progressive tax is higher, so it applies.</>}
+          <span className="font-semibold">ภาษีขั้นต่ำ:</span> เงินได้ที่ไม่ใช่เงินเดือน {THB(r.otherIncome)} ตั้งแต่ 120,000 บาทขึ้นไป จึงต้องคำนวณอีกวิธีคือ
+          0.5% ของเงินได้นี้ = {THB(r.minimumTax)} {r.minimumApplies
+            ? <>ซึ่งสูงกว่าภาษีขั้นบันไดและเกิน 5,000 บาท จึงใช้วิธีนี้</>
+            : r.minimumTax <= 5_000 ? <>ไม่เกิน 5,000 บาทจึงได้รับยกเว้น ใช้ภาษีขั้นบันได</>
+            : <>ภาษีขั้นบันไดสูงกว่า จึงใช้ภาษีขั้นบันได</>}
         </p>
       )}
       <p className="text-xs text-ink-3">
-        An estimate to plan with, not tax advice. Not covered: the 190,000 exemption at 65 and over, severance and retirement pay
-        worked out separately, the dividend tax credit, and filing jointly. Check the Revenue Department (rd.go.th) before you file.
+        ตัวเลขนี้เป็นการประมาณเพื่อวางแผน ไม่ใช่คำแนะนำทางภาษี ยังไม่รวม: เงินได้ที่ได้รับยกเว้น 190,000 บาทสำหรับผู้อายุ 65 ปีขึ้นไป
+        เงินชดเชยและเงินที่จ่ายเพราะเหตุออกจากงานที่แยกคำนวณ เครดิตภาษีเงินปันผล และการยื่นแบบรวมกับคู่สมรส ตรวจสอบกับกรมสรรพากร (rd.go.th) ก่อนยื่นแบบ
       </p>
     </Step>
   );
 }
 
-const range = (b: BracketRow) => (b.upTo === null ? `Over ${k(b.from)}` : `${k(b.from === 0 ? 0 : b.from + 1)} – ${k(b.upTo)}`);
+const range = (b: BracketRow) => (b.upTo === null ? `เกิน ${k(b.from)}` : `${k(b.from === 0 ? 0 : b.from + 1)} – ${k(b.upTo)}`);
 
 function SaveStatus({ status }: { status: Status }) {
   if (status.error) return <span role="alert" className="text-xs font-semibold text-miss-text">{status.error}</span>;
-  return <span role="status" className="text-xs text-ink-3">{status.pending > 0 ? "Saving…" : "All changes saved"}</span>;
+  return <span role="status" className="text-xs text-ink-3">{status.pending > 0 ? "กำลังบันทึก…" : "บันทึกแล้ว"}</span>;
 }
 
 /** What changed since the page was opened: tax up is red, down is green. */
 function Change({ now, then }: { now: number; then: number }) {
   const diff = Math.round((now - then) * 100) / 100;
   if (Math.abs(diff) < 0.005) return null;
-  return <span className={`num text-xs font-semibold ${diff > 0 ? "text-miss-text" : "text-go-text"}`}>{diff > 0 ? "+" : "−"}{THB(Math.abs(diff))} since opened</span>;
+  return <span className={`num text-xs font-semibold ${diff > 0 ? "text-miss-text" : "text-go-text"}`}>{diff > 0 ? "+" : "−"}{THB(Math.abs(diff))} จากตอนเปิดหน้า</span>;
 }
 
 /** The next bracket down, and how much more deduction would reach it. */
@@ -376,7 +376,7 @@ function Rates({ r }: { r: TaxResult }) {
   return (
     <table className="w-full text-sm">
       <thead className="text-left text-[11px] text-ink-3">
-        <tr><th className="pb-1 font-semibold">Net income</th><th className="pb-1 text-right font-semibold">Rate</th><th className="pb-1 text-right font-semibold">Tax</th></tr>
+        <tr><th className="pb-1 font-semibold">เงินได้สุทธิ</th><th className="pb-1 text-right font-semibold">อัตรา</th><th className="pb-1 text-right font-semibold">ภาษี</th></tr>
       </thead>
       <tbody>
         {r.brackets.map((b, i) => {
@@ -407,32 +407,32 @@ function Panel({ r, opened, status }: { r: TaxResult; opened: TaxResult; status:
     <section className="card space-y-4 p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-lg">
-          Your tax
-          <Info label="About the rates">The progressive rates on net income, unchanged since tax year 2017. The first 150,000 is free, then each slice pays its own rate: only the part inside a bracket pays that bracket&apos;s rate. The bar shows how full each bracket is.</Info>
+          ภาษีของคุณ
+          <Info label="เกี่ยวกับอัตราภาษี">อัตราภาษีขั้นบันไดของเงินได้สุทธิ ใช้มาตั้งแต่ปีภาษี 2560 เงินได้สุทธิ 150,000 บาทแรกได้รับยกเว้น ส่วนที่เกินเสียภาษีตามอัตราของแต่ละขั้น เฉพาะส่วนที่อยู่ในขั้นนั้น แถบสีแสดงว่าใช้แต่ละขั้นไปเท่าไร</Info>
         </h2>
         <SaveStatus status={status} />
       </div>
       <ul className="space-y-1 text-sm">
-        <li className="flex justify-between"><span className="text-ink-3">Income</span><span className="num">{THB(r.assessable)}</span></li>
-        <li className="flex justify-between"><span className="text-ink-3">− Expenses</span><span className="num">{THB(r.expenseTotal)}</span></li>
-        <li className="flex justify-between"><span className="text-ink-3">− Deductions and donations</span><span className="num">{THB(r.allowanceTotal + r.donationTotal)}</span></li>
-        <li className="flex items-baseline justify-between border-t border-line pt-1 font-bold"><span>Net income</span><span className="num">{THB(r.net)}</span></li>
+        <li className="flex justify-between"><span className="text-ink-3">เงินได้</span><span className="num">{THB(r.assessable)}</span></li>
+        <li className="flex justify-between"><span className="text-ink-3">− ค่าใช้จ่าย</span><span className="num">{THB(r.expenseTotal)}</span></li>
+        <li className="flex justify-between"><span className="text-ink-3">− ค่าลดหย่อนและเงินบริจาค</span><span className="num">{THB(r.allowanceTotal + r.donationTotal)}</span></li>
+        <li className="flex items-baseline justify-between border-t border-line pt-1 font-bold"><span>เงินได้สุทธิ</span><span className="num">{THB(r.net)}</span></li>
       </ul>
       <Rates r={r} />
       <ul className="space-y-1 border-t border-line pt-3 text-sm">
-        <li className="flex justify-between"><span className="text-ink-3">Tax by the rates</span><span className="num">{THB(r.progressiveTax)}</span></li>
-        {r.minimumApplies && <li className="flex justify-between"><span className="text-ink-3">Minimum tax (0.5%) applies</span><span className="num">{THB(r.tax)}</span></li>}
-        <li className="flex items-baseline justify-between font-bold"><span>Tax due</span><span className="num">{THB(r.tax)}</span></li>
+        <li className="flex justify-between"><span className="text-ink-3">ภาษีตามอัตราขั้นบันได</span><span className="num">{THB(r.progressiveTax)}</span></li>
+        {r.minimumApplies && <li className="flex justify-between"><span className="text-ink-3">ใช้ภาษีขั้นต่ำ 0.5%</span><span className="num">{THB(r.tax)}</span></li>}
+        <li className="flex items-baseline justify-between font-bold"><span>ภาษีที่ต้องเสีย</span><span className="num">{THB(r.tax)}</span></li>
         <li className="text-right"><Change now={r.tax} then={opened.tax} /></li>
-        <li className="flex justify-between"><span className="text-ink-3">− Withheld</span><span className="num">{THB(r.withheld)}</span></li>
+        <li className="flex justify-between"><span className="text-ink-3">− ภาษีหัก ณ ที่จ่าย</span><span className="num">{THB(r.withheld)}</span></li>
         <li className={`flex items-baseline justify-between text-base font-bold ${r.balance < 0 ? "text-go-text" : ""}`}>
-          <span>{r.balance < 0 ? "Comes back" : "Still to pay"}</span><span className="num">{THB(Math.abs(r.balance))}</span>
+          <span>{r.balance < 0 ? "ได้คืน" : "ชำระเพิ่ม"}</span><span className="num">{THB(Math.abs(r.balance))}</span>
         </li>
       </ul>
       <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
-        {(r.effectiveRate * 100).toFixed(2)}% of income. Top rate {Math.round(r.marginal * 100)}%
-        {r.marginal > 0 && !r.minimumApplies && <>: each 1,000 more of deductions saves {k(r.marginal * 1000)}</>}.
-        {down && <> {THB(down.need)} more of deductions brings net income down to the {Math.round(down.rate * 100)}% bracket.</>}
+        ภาษีคิดเป็น {(r.effectiveRate * 100).toFixed(2)}% ของเงินได้ อัตราสูงสุดที่ใช้ {Math.round(r.marginal * 100)}%
+        {r.marginal > 0 && !r.minimumApplies && <> ลดหย่อนเพิ่มทุก 1,000 บาท ประหยัดภาษีได้ {k(r.marginal * 1000)} บาท</>}
+        {down && <> ลดหย่อนเพิ่มอีก {THB(down.need)} เงินได้สุทธิจะลงมาอยู่ขั้น {Math.round(down.rate * 100)}%</>}
       </p>
     </section>
   );
@@ -447,10 +447,10 @@ function MobilePanel({ r, opened, status }: { r: TaxResult; opened: TaxResult; s
         {open && <div className="max-h-[60vh] overflow-y-auto border-b border-line"><Panel r={r} opened={opened} status={status} /></div>}
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-2.5 text-left">
           <span className="min-w-0 flex-1">
-            <span className="block text-[11px] text-ink-3">Net {THB(r.net)} · top rate {Math.round(r.marginal * 100)}%</span>
-            <span className="num block font-bold">Tax {THB(r.tax)} <span className={`text-xs ${r.balance < 0 ? "text-go-text" : "text-ink-3"}`}>{r.balance < 0 ? `${THB(-r.balance)} back` : `${THB(r.balance)} to pay`}</span></span>
+            <span className="block text-[11px] text-ink-3">เงินได้สุทธิ {THB(r.net)} · อัตราสูงสุด {Math.round(r.marginal * 100)}%</span>
+            <span className="num block font-bold">ภาษี {THB(r.tax)} <span className={`text-xs ${r.balance < 0 ? "text-go-text" : "text-ink-3"}`}>{r.balance < 0 ? `ได้คืน ${THB(-r.balance)}` : `ชำระเพิ่ม ${THB(r.balance)}`}</span></span>
           </span>
-          <span className="text-xs font-semibold text-brand">{open ? "Hide" : "Rates"}</span>
+          <span className="text-xs font-semibold text-brand">{open ? "ซ่อน" : "ตารางภาษี"}</span>
         </button>
       </div>
     </div>
