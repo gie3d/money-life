@@ -9,7 +9,7 @@ export default function VersionPicker({ versions, shown }: { versions: { version
     <label className="flex items-center gap-2 text-sm text-ink-3">
       Version
       <select
-        className="field num w-auto"
+        className="field num w-auto cursor-pointer border-line bg-surface font-semibold shadow-sm transition-colors hover:border-brand"
         value={shown}
         onChange={(e) => {
           const v = e.target.value;
