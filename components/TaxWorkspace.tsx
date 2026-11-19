@@ -203,11 +203,11 @@ function IncomeRow({ income: i, onChange }: { income: TaxIncome; onChange: (p: P
       </span>
       <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-1 sm:block">
         <span className="text-xs text-ink-3 sm:sr-only">เงินได้</span>
-        <NumberInput math aria-label={`เงินได้ ${i.name}`} defaultValue={plainNumber(i.amount)} onValueChange={(v) => onChange({ amount: Number(v) || 0 })} className={`${field} ${i.separate ? "text-ink-3 line-through" : ""}`} />
+        <NumberInput aria-label={`เงินได้ ${i.name}`} defaultValue={plainNumber(i.amount)} onValueChange={(v) => onChange({ amount: Number(v) || 0 })} className={`${field} ${i.separate ? "text-ink-3 line-through" : ""}`} />
       </label>
       <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-1 sm:block">
         <span className="text-xs text-ink-3 sm:sr-only">หัก ณ ที่จ่าย</span>
-        <NumberInput math aria-label={`ภาษีหัก ณ ที่จ่าย ${i.name}`} title="ภาษีหัก ณ ที่จ่าย" placeholder="หัก ณ ที่จ่าย" defaultValue={i.withheld ? plainNumber(i.withheld) : ""} onValueChange={(v) => onChange({ withheld: Number(v) || 0 })} className={field} />
+        <NumberInput aria-label={`ภาษีหัก ณ ที่จ่าย ${i.name}`} title="ภาษีหัก ณ ที่จ่าย" placeholder="หัก ณ ที่จ่าย" defaultValue={i.withheld ? plainNumber(i.withheld) : ""} onValueChange={(v) => onChange({ withheld: Number(v) || 0 })} className={field} />
       </label>
       <span className="col-start-3 row-start-1 flex items-center sm:col-start-auto sm:row-start-auto">
         <EditTaxIncomeButton save={updateTaxIncome.bind(null, i.id)} income={i} />
@@ -219,7 +219,7 @@ function IncomeRow({ income: i, onChange }: { income: TaxIncome; onChange: (p: P
       {i.actualExpense !== null && (
         <label className="col-span-3 grid grid-cols-[7rem_1fr] items-center gap-2 sm:col-span-2 sm:col-start-3 sm:grid-cols-[auto_8rem] sm:justify-end">
           <span className="text-xs text-ink-3">ค่าใช้จ่ายจริง</span>
-          <NumberInput math aria-label={`ค่าใช้จ่ายจริง ${i.name}`} defaultValue={plainNumber(i.actualExpense)} onValueChange={(v) => onChange({ actualExpense: Number(v) || 0 })} className={field} />
+          <NumberInput aria-label={`ค่าใช้จ่ายจริง ${i.name}`} defaultValue={plainNumber(i.actualExpense)} onValueChange={(v) => onChange({ actualExpense: Number(v) || 0 })} className={field} />
         </label>
       )}
     </li>
@@ -303,7 +303,7 @@ function DeductionField({ f, d, ctx, line, onChange }: { f: Field; d: Deductions
         <input type="number" min={0} max={f.count} step={1} value={Number(value) || ""} placeholder="0"
           onChange={(e) => onChange(f.key, Math.min(f.count!, Math.max(0, Math.floor(Number(e.target.value) || 0))))} className="field num" />
       ) : (
-        <NumberInput math defaultValue={value ? plainNumber(Number(value)) : ""} placeholder="0" onValueChange={(v) => onChange(f.key, Number(v) || 0)} className="field num" />
+        <NumberInput defaultValue={value ? plainNumber(Number(value)) : ""} placeholder="0" onValueChange={(v) => onChange(f.key, Number(v) || 0)} className="field num" />
       )}
       <span className="block text-xs text-ink-3">{f.hint(ctx)}</span>
     </label>
