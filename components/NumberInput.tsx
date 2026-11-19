@@ -45,41 +45,31 @@ export function calc(text: string): number | null {
   return i === t.length && Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
 }
 
-/** How long typing pauses before a sum is worked out. */
-const CALC_AFTER_MS = 800;
-
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue" | "onChange" | "type"> & {
   /** Pass `value` and `onValueChange` to control it. Both are plain numbers as text, without commas. */
   value?: string;
   defaultValue?: string;
   onValueChange?: (raw: string) => void;
-  /** Lets a sum be typed without "=" ("15000*6"): it is worked out once typing pauses, or on leaving the field or Enter. */
-  math?: boolean;
 };
 
 /**
  * A text field for amounts that shows thousands separators while you type. What is submitted keeps the
  * commas (the server ignores them); `onValueChange` receives the number without them. Starting with "=" types a
- * sum ("=1000*6") that is worked out on leaving the field or Enter, like a spreadsheet. With `math`, a sum can also be
- * typed without the "=" and is worked out once typing pauses.
+ * sum ("=1000*6") that is worked out on leaving the field or Enter, like a spreadsheet.
  */
-export default function NumberInput({ value, defaultValue = "", onValueChange, math = false, onBlur, onKeyDown, ...rest }: Props) {
+export default function NumberInput({ value, defaultValue = "", onValueChange, onBlur, onKeyDown, ...rest }: Props) {
   const [inner, setInner] = useState(defaultValue);
   // A sum being typed, shown as typed until it is worked out.
   const [sum, setSum] = useState<string | null>(null);
   // A sum that didn't work out when left: marked until it is changed.
   const [bad, setBad] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ref = useRef<HTMLInputElement>(null);
   const caret = useRef<number | null>(null);
   const controlled = value !== undefined;
   const shown = sum ?? group(controlled ? value : inner);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
   /** Puts the result of the sum in the field; a sum that doesn't work out stays as typed. */
   const work = (text: string) => {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const v = calc(text);
     if (v === null) { setBad(true); return; }
     const raw = String(v);
@@ -126,19 +116,10 @@ export default function NumberInput({ value, defaultValue = "", onValueChange, m
         setBad(false);
         // A leading "=" starts a sum: keep it as typed and work it out on leaving the field or Enter.
         if (/^\s*=/.test(el.value)) {
-          if (timer.current) { clearTimeout(timer.current); timer.current = null; }
           setSum(`=${el.value.replace(/^\s*=/, "").replace(/[^0-9.,+\-*/xX×÷()\s−–]/g, "")}`);
           return;
         }
-        // With `math`, anything besides digits, commas and a dot is a sum: keep it as typed and work it out after a pause.
-        if (math && /[^0-9.,\s]/.test(el.value)) {
-          const text = el.value.replace(/[^0-9.,+\-*/xX×÷()\s−–]/g, "");
-          setSum(text);
-          if (timer.current) clearTimeout(timer.current);
-          timer.current = setTimeout(() => work(text), CALC_AFTER_MS);
-          return;
-        }
-        if (sum !== null) { setSum(null); if (timer.current) { clearTimeout(timer.current); timer.current = null; } }
+        if (sum !== null) setSum(null);
         const before = el.value.slice(0, el.selectionStart ?? el.value.length);
         const significant = before.replace(/[^0-9.]/g, "").length; // digits and the dot, not the commas
         const raw = group(el.value).replace(/,/g, "");

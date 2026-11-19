@@ -89,11 +89,11 @@ export function TaxIncomeForm({ save, income, onDone }: { save: Save; income?: T
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1.5">
           <span className="eyebrow">เงินได้ทั้งปี (บาท)</span>
-          <NumberInput math name="amount" required defaultValue={income ? plainNumber(income.amount) : ""} placeholder="0" className="field num" />
+          <NumberInput name="amount" required defaultValue={income ? plainNumber(income.amount) : ""} placeholder="0" className="field num" />
         </label>
         <label className="block space-y-1.5">
           <span className="eyebrow">ภาษีหัก ณ ที่จ่าย</span>
-          <NumberInput math name="withheld" defaultValue={income?.withheld ? plainNumber(income.withheld) : ""} placeholder="0" className="field num" />
+          <NumberInput name="withheld" defaultValue={income?.withheld ? plainNumber(income.withheld) : ""} placeholder="0" className="field num" />
         </label>
       </div>
       {t.kinds && (
@@ -113,7 +113,7 @@ export function TaxIncomeForm({ save, income, onDone }: { save: Save; income?: T
           {actual && (
             <label className="block space-y-1.5">
               <span className="eyebrow">ค่าใช้จ่ายจริง (มีหลักฐาน)</span>
-              <NumberInput math name="actual_expense" defaultValue={income?.actualExpense != null ? plainNumber(income.actualExpense) : ""} placeholder="0" className="field num" />
+              <NumberInput name="actual_expense" defaultValue={income?.actualExpense != null ? plainNumber(income.actualExpense) : ""} placeholder="0" className="field num" />
             </label>
           )}
         </div>
