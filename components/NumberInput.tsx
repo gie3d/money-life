@@ -15,10 +15,11 @@ export function group(raw: string): string {
 
 /**
  * Works out a sum typed in a field: + − × ÷ and brackets ("15000*6", "1,200 x 12", "(500+250)*4"). Commas are
- * ignored; x and × multiply, ÷ divides. Null when it isn't a whole, valid sum. No eval: a small parser.
+ * ignored; x and × multiply, ÷ divides. A leading "=" (as in a spreadsheet) is allowed. Null when it isn't a whole,
+ * valid sum. No eval: a small parser.
  */
 export function calc(text: string): number | null {
-  const t = text.replace(/,/g, "").replace(/[x×X]/g, "*").replace(/÷/g, "/").replace(/[−–]/g, "-").replace(/\s+/g, "");
+  const t = text.trim().replace(/^=/, "").replace(/,/g, "").replace(/[x×X]/g, "*").replace(/÷/g, "/").replace(/[−–]/g, "-").replace(/\s+/g, "");
   let i = 0;
   const sum = (): number => {
     let v = product();
@@ -52,14 +53,15 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "defaultValue
   value?: string;
   defaultValue?: string;
   onValueChange?: (raw: string) => void;
-  /** Lets a sum be typed ("15000*6"): it is worked out once typing pauses, or on leaving the field or Enter. */
+  /** Lets a sum be typed without "=" ("15000*6"): it is worked out once typing pauses, or on leaving the field or Enter. */
   math?: boolean;
 };
 
 /**
  * A text field for amounts that shows thousands separators while you type. What is submitted keeps the
- * commas (the server ignores them); `onValueChange` receives the number without them. With `math`, a sum can be
- * typed and is replaced by its result.
+ * commas (the server ignores them); `onValueChange` receives the number without them. Starting with "=" types a
+ * sum ("=1000*6") that is worked out on leaving the field or Enter, like a spreadsheet. With `math`, a sum can also be
+ * typed without the "=" and is worked out once typing pauses.
  */
 export default function NumberInput({ value, defaultValue = "", onValueChange, math = false, onBlur, onKeyDown, ...rest }: Props) {
   const [inner, setInner] = useState(defaultValue);
@@ -89,7 +91,7 @@ export default function NumberInput({ value, defaultValue = "", onValueChange, m
   // A form reset (after a successful save) puts back the starting value.
   useEffect(() => {
     const form = ref.current?.form;
-    const onReset = () => setInner(defaultValue);
+    const onReset = () => { setInner(defaultValue); setSum(null); setBad(false); };
     form?.addEventListener("reset", onReset);
     return () => form?.removeEventListener("reset", onReset);
   }, [defaultValue]);
@@ -112,7 +114,8 @@ export default function NumberInput({ value, defaultValue = "", onValueChange, m
       value={shown}
       aria-invalid={bad || undefined}
       title={bad ? "This sum doesn't work out" : rest.title}
-      onBlur={(e) => { if (sum !== null) work(sum); onBlur?.(e); }}
+      // flushSync so a parent's onBlur already sees the result in the field.
+      onBlur={(e) => { if (sum !== null) flushSync(() => work(sum)); onBlur?.(e); }}
       onKeyDown={(e) => {
         // Enter submits the form: work the sum out first, so the number is what gets sent.
         if (e.key === "Enter" && sum !== null) flushSync(() => work(sum));
@@ -121,7 +124,13 @@ export default function NumberInput({ value, defaultValue = "", onValueChange, m
       onChange={(e) => {
         const el = e.target;
         setBad(false);
-        // Anything besides digits, commas and a dot is a sum: keep it as typed and work it out after a pause.
+        // A leading "=" starts a sum: keep it as typed and work it out on leaving the field or Enter.
+        if (/^\s*=/.test(el.value)) {
+          if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+          setSum(`=${el.value.replace(/^\s*=/, "").replace(/[^0-9.,+\-*/xX×÷()\s−–]/g, "")}`);
+          return;
+        }
+        // With `math`, anything besides digits, commas and a dot is a sum: keep it as typed and work it out after a pause.
         if (math && /[^0-9.,\s]/.test(el.value)) {
           const text = el.value.replace(/[^0-9.,+\-*/xX×÷()\s−–]/g, "");
           setSum(text);
