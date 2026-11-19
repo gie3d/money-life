@@ -1,11 +1,11 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useState } from "react";
 import { createTaxPlan, type TaxState } from "@/app/actions/tax";
 import EditDialog from "./EditDialog";
 import NumberInput from "./NumberInput";
 import { plainNumber } from "@/lib/format";
-import { incomeType, INCOME_TYPES, type Deductions, type IncomeType, type TaxIncome, type YearRules } from "@/lib/tax";
+import { incomeType, INCOME_TYPES, type IncomeType, type TaxIncome } from "@/lib/tax";
 
 type Save = (prev: TaxState, form: FormData) => Promise<TaxState>;
 
@@ -128,97 +128,6 @@ export function TaxIncomeForm({ save, income, onDone }: { save: Save; income?: T
       <div className="flex items-center gap-3">
         <button className="btn" disabled={pending}>{pending ? "Saving…" : income ? "Save" : "Add income"}</button>
         {!income && state?.saved && !pending && <p role="status" className="text-sm font-semibold text-go-text">Added</p>}
-      </div>
-    </form>
-  );
-}
-
-function Amount({ name, label, value, hint }: { name: keyof Deductions; label: string; value: number; hint: ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-semibold">{label}</span>
-      <NumberInput name={name} defaultValue={value ? plainNumber(value) : ""} placeholder="0" className="field num" />
-      <span className="block text-xs text-ink-3">{hint}</span>
-    </label>
-  );
-}
-
-function Count({ name, label, value, hint, max = 20 }: { name: keyof Deductions; label: string; value: number; hint: string; max?: number }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-semibold">{label}</span>
-      <input name={name} type="number" min={0} max={max} step={1} defaultValue={value || ""} placeholder="0" className="field num" />
-      <span className="block text-xs text-ink-3">{hint}</span>
-    </label>
-  );
-}
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <fieldset className="space-y-3">
-      <legend className="eyebrow mb-2">{title}</legend>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
-    </fieldset>
-  );
-}
-
-const k = (n: number) => n.toLocaleString("en-US");
-
-/** Every allowance and deduction of a plan in one form, grouped the way the return lists them. */
-export function TaxDeductionsForm({ save, d, rules, year }: { save: Save; d: Deductions; rules: YearRules; year: number }) {
-  const [state, action, pending] = useActionState<TaxState, FormData>(save, undefined);
-  const [edited, setEdited] = useState(false);
-  return (
-    <form action={action} onChange={() => setEdited(true)} onSubmit={() => setEdited(false)} className="space-y-6">
-      <Group title="ค่าลดหย่อนส่วนตัวและครอบครัว">
-        <div className="space-y-1">
-          <span className="text-sm font-semibold">ผู้มีเงินได้</span>
-          <p className="field text-ink-3">60,000</p>
-          <span className="block text-xs text-ink-3">ทุกคนได้รับค่าลดหย่อนส่วนตัว</span>
-        </div>
-        <label className="flex items-start gap-2 self-center text-sm">
-          <input type="checkbox" name="spouse" defaultChecked={d.spouse} className="mt-1" />
-          <span><span className="font-semibold">คู่สมรสไม่มีเงินได้</span><span className="block text-xs text-ink-3">จดทะเบียนสมรส 60,000 บาท</span></span>
-        </label>
-        <Count name="childrenBefore2018" label="บุตรที่เกิดก่อนปี 2561" value={d.childrenBefore2018} hint="คนละ 30,000 บาท อายุไม่เกิน 20 ปี (หรือไม่เกิน 25 ปีถ้ายังเรียนอยู่)" />
-        <Count name="childrenFrom2018" label="บุตรที่เกิดตั้งแต่ปี 2561" value={d.childrenFrom2018} hint="30,000 บาท ตั้งแต่บุตรคนที่ 2 คนละ 60,000 บาท" />
-        <Count name="parents" label="บิดามารดาที่อุปการะ" value={d.parents} max={4} hint="คนละ 30,000 บาท อายุ 60 ปีขึ้นไป เงินได้ไม่เกิน 30,000 บาท สูงสุด 4 คน" />
-        <Count name="disabled" label="ผู้พิการหรือทุพพลภาพที่อุปการะ" value={d.disabled} hint="คนละ 60,000 บาท ต้องมีบัตรคนพิการ" />
-        <Amount name="prenatal" label="ค่าฝากครรภ์และค่าคลอดบุตร" value={d.prenatal} hint="ไม่เกิน 60,000 บาทต่อการตั้งครรภ์" />
-      </Group>
-
-      <Group title="ประกันและประกันสังคม">
-        <Amount name="socialSecurity" label="เงินสมทบประกันสังคม" value={d.socialSecurity} hint={`ตามที่จ่ายจริง ไม่เกิน ${k(rules.socialSecurityCap)} บาท ในปีภาษี ${year + 543}`} />
-        <Amount name="lifeInsurance" label="เบี้ยประกันชีวิต" value={d.lifeInsurance} hint="ไม่เกิน 100,000 บาท กรมธรรม์ 10 ปีขึ้นไป" />
-        <Amount name="healthInsurance" label="เบี้ยประกันสุขภาพ" value={d.healthInsurance} hint="ไม่เกิน 25,000 บาท รวมกับประกันชีวิตไม่เกิน 100,000 บาท" />
-        <Amount name="spouseLifeInsurance" label="เบี้ยประกันชีวิตคู่สมรส" value={d.spouseLifeInsurance} hint="ไม่เกิน 10,000 บาท คู่สมรสไม่มีเงินได้" />
-        <Amount name="parentsHealthInsurance" label="เบี้ยประกันสุขภาพบิดามารดา" value={d.parentsHealthInsurance} hint="รวมทุกคนไม่เกิน 15,000 บาท" />
-      </Group>
-
-      <Group title="เงินออมและการลงทุน">
-        <Amount name="providentFund" label="กองทุนสำรองเลี้ยงชีพ / กบข." value={d.providentFund} hint="ส่วนที่ลูกจ้างจ่าย ไม่เกิน 15% ของค่าจ้าง" />
-        <Amount name="rmf" label="กองทุนรวมเพื่อการเลี้ยงชีพ (RMF)" value={d.rmf} hint="ไม่เกิน 30% ของเงินได้ และไม่เกิน 500,000 บาท" />
-        <Amount name="pensionInsurance" label="เบี้ยประกันชีวิตแบบบำนาญ" value={d.pensionInsurance} hint="ไม่เกิน 15% ของเงินได้ และไม่เกิน 200,000 บาท" />
-        <Amount name="ssf" label="กองทุนรวมเพื่อการออม (SSF)" value={d.ssf} hint={rules.ssfCap > 0 ? `ไม่เกิน 30% ของเงินได้ และไม่เกิน ${k(rules.ssfCap)} บาท` : `ใช้ลดหย่อนปีภาษี ${year + 543} ไม่ได้ (เฉพาะที่ซื้อถึงปี 2567)`} />
-        <Amount name="thaiEsg" label="กองทุนรวมไทยเพื่อความยั่งยืน (Thai ESG)" value={d.thaiEsg} hint={`ไม่เกิน 30% ของเงินได้ และไม่เกิน ${k(rules.thaiEsgCap)} บาท แยกวงเงินต่างหาก`} />
-        <p className="text-xs text-ink-3 sm:col-span-2 lg:col-span-3">กองทุนสำรองเลี้ยงชีพ RMF ประกันบำนาญ และ SSF รวมกันไม่เกิน 500,000 บาท</p>
-      </Group>
-
-      <Group title="ที่อยู่อาศัยและมาตรการกระตุ้นเศรษฐกิจ">
-        <Amount name="homeLoanInterest" label="ดอกเบี้ยเงินกู้ซื้อที่อยู่อาศัย" value={d.homeLoanInterest} hint="ไม่เกิน 100,000 บาท" />
-        <Amount name="easyEReceipt" label="Easy e-Receipt" value={d.easyEReceipt} hint={rules.easyEReceiptCap > 0 ? `ไม่เกิน ${k(rules.easyEReceiptCap)} บาท ${rules.easyEReceiptNoteTh}` : rules.easyEReceiptNoteTh} />
-      </Group>
-
-      <Group title="เงินบริจาค">
-        <Amount name="donationDouble" label="บริจาคเพื่อการศึกษา โรงพยาบาลรัฐ สภากาชาดไทย" value={d.donationDouble} hint="หักได้ 2 เท่า ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อน" />
-        <Amount name="donationGeneral" label="เงินบริจาคทั่วไป" value={d.donationGeneral} hint="วัด มูลนิธิ ไม่เกิน 10% ของเงินได้หลังหักค่าลดหย่อน ตั้งแต่ปี 2569 ต้องผ่าน e-Donation" />
-        <Amount name="politicalDonation" label="บริจาคพรรคการเมือง" value={d.politicalDonation} hint="ไม่เกิน 10,000 บาท" />
-      </Group>
-
-      <Error state={state} />
-      <div className="flex items-center gap-3">
-        <button className="btn" disabled={pending}>{pending ? "กำลังบันทึก…" : "บันทึกค่าลดหย่อน"}</button>
-        {state?.saved && !edited && !pending && <p role="status" className="text-sm font-semibold text-go-text">บันทึกแล้ว</p>}
       </div>
     </form>
   );

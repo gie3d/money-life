@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { pool } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { incomeType, INCOME_TYPES, NO_DEDUCTIONS, type IncomeType } from "@/lib/tax";
+import { incomeType, INCOME_TYPES, NO_DEDUCTIONS, readDeductions, type Deductions, type IncomeType } from "@/lib/tax";
 /** A form's result: an error to show, or `saved` once it stored the change. */
 export type TaxState = { error?: string; saved?: boolean } | undefined;
 
@@ -141,22 +141,41 @@ export async function deleteTaxIncome(incomeId: number) {
   if (rows[0]) { revalidatePath(`/tax/${rows[0].plan_id}`); revalidatePath("/tax"); }
 }
 
-/** Saves every deduction of the plan at once. Fields are the keys of Deductions; counts are whole numbers. */
-export async function saveTaxDeductions(planId: number, _: TaxState, form: FormData): Promise<TaxState> {
+/**
+ * Saves every deduction of the plan at once, as the page autosaves while you type. Amounts below zero or counts
+ * that aren't whole are refused; `readDeductions` drops anything else that isn't a deduction.
+ */
+export async function saveTaxDeductionValues(planId: number, values: Deductions): Promise<TaxState> {
   const user = await requireUser();
-  const out: Record<string, number | boolean> = {};
+  const raw = (values ?? {}) as Record<string, unknown>;
   for (const k of Object.keys(NO_DEDUCTIONS)) {
-    if (k === "spouse") { out[k] = form.get(k) === "on"; continue; }
-    const n = num(form.get(k));
+    if (k === "spouse") continue;
+    const n = Number(raw[k] ?? 0);
     if (!(n >= 0)) return { error: "Every amount must be zero or more." };
-    const counted = ["childrenBefore2018", "childrenFrom2018", "parents", "disabled"].includes(k);
-    if (counted && !Number.isInteger(n)) return { error: "Count people in whole numbers." };
-    if (k === "parents" && n > 4) return { error: "Up to 4 parents: yours and your spouse's." };
-    out[k] = n;
+    if (["childrenBefore2018", "childrenFrom2018", "parents", "disabled"].includes(k) && !Number.isInteger(n)) return { error: "Count people in whole numbers." };
   }
-  const { rowCount } = await pool.query("UPDATE tax_plans SET deductions = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, JSON.stringify(out)]);
+  if (Number(raw.parents ?? 0) > 4) return { error: "Up to 4 parents: yours and your spouse's." };
+  const d = readDeductions(raw);
+  const { rowCount } = await pool.query("UPDATE tax_plans SET deductions = $3 WHERE id = $1 AND user_id = $2", [planId, user.id, JSON.stringify(d)]);
   if (!rowCount) return { error: "That plan no longer exists." };
-  revalidatePath(`/tax/${planId}`);
+  revalidatePath("/tax");
+  return { saved: true };
+}
+
+/** Saves the amounts of one income as they are typed in its row (its type and name change in the edit dialog). */
+export async function saveTaxIncomeValues(incomeId: number, v: { amount: number; withheld: number; actualExpense: number | null }): Promise<TaxState> {
+  const user = await requireUser();
+  const amount = Number(v?.amount);
+  const withheld = Number(v?.withheld);
+  const actual = v?.actualExpense === null || v?.actualExpense === undefined ? null : Number(v.actualExpense);
+  if (!(amount >= 0) || !(withheld >= 0) || (actual !== null && !(actual >= 0))) return { error: "Amounts must be zero or more." };
+  const { rowCount } = await pool.query(
+    `UPDATE tax_incomes t SET amount = $3, withheld = $4,
+       actual_expense = CASE WHEN t.actual_expense IS NULL THEN NULL ELSE $5::numeric END
+     FROM tax_plans p WHERE t.id = $1 AND p.id = t.plan_id AND p.user_id = $2`,
+    [incomeId, user.id, amount, withheld, actual ?? 0],
+  );
+  if (!rowCount) return { error: "That income no longer exists." };
   revalidatePath("/tax");
   return { saved: true };
 }
