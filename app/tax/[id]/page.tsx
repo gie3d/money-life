@@ -27,7 +27,7 @@ export default async function TaxPlanPage({ params }: PageProps<"/tax/[id]">) {
   const years = [...new Set([...taxYears(now), plan.year])].sort((a, b) => b - a);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-[77rem] space-y-5 px-4 py-6">
       <Breadcrumb items={[{ label: "ภาษี", href: "/tax" }, { label: `ปีภาษี ${plan.year + 543}` }, { label: plan.name }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

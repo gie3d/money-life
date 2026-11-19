@@ -235,13 +235,13 @@ function Deductions2({ r, d, ctx, onChange }: { r: TaxResult; d: Deductions; ctx
 
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="กลุ่มค่าลดหย่อน" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+      <div role="tablist" aria-label="กลุ่มค่าลดหย่อน" className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {TABS.map((t) => {
           const on = t.id === tab;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.id)}
-              className={`shrink-0 rounded-2xl px-3.5 py-2 text-left ${on ? "bg-ink text-surface" : "bg-surface-2 text-ink-2 hover:text-ink"}`}>
-              <span className="block text-sm font-bold">{t.label}</span>
+              className={`flex min-w-0 flex-col justify-between rounded-2xl px-3.5 py-2 text-left ${on ? "bg-ink text-surface" : "bg-surface-2 text-ink-2 hover:text-ink"}`}>
+              <span className="block text-sm font-bold leading-snug">{t.label}</span>
               <span className={`num block text-[11px] ${on ? "opacity-75" : "text-ink-3"}`}>−{k(Math.round(total(t)))}</span>
             </button>
           );
