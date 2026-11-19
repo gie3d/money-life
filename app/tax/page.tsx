@@ -18,7 +18,7 @@ export default async function TaxPage() {
   const years = [...new Set(plans.map((p) => p.year))];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-[77rem] space-y-5 px-4 py-6">
       <SectionTabs section="future" current="/tax" />
       <div>
         <h1 className="text-3xl">ภาษีเงินได้บุคคลธรรมดา</h1>
