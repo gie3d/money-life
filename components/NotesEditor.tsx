@@ -15,8 +15,8 @@ type Save = (prev: FormState, form: FormData) => Promise<FormState>;
 const WORDS = {
   en: { edit: "Edit notes", title: "Notes", add: "Add notes", view: "Notes view", tabs: { write: "Write", preview: "Preview" }, empty: "Nothing to preview yet.", anything: "Anything worth keeping…",
     help: "Markdown is supported: headings (#), **bold**, *italic*, lists, [links](url), `code`, > quotes, tables and - [ ] checklists.", cancel: "Cancel", saving: "Saving…", save: "Save notes" },
-  th: { edit: "แก้ไขบันทึก", title: "บันทึก", add: "เพิ่มบันทึก", view: "มุมมองบันทึก", tabs: { write: "เขียน", preview: "ตัวอย่าง" }, empty: "ยังไม่มีอะไรให้แสดง", anything: "สิ่งที่อยากจดไว้…",
-    help: "รองรับ Markdown: หัวข้อ (#), **ตัวหนา**, *ตัวเอียง*, รายการ, [ลิงก์](url), `โค้ด`, > คำพูด, ตาราง และ - [ ] รายการตรวจสอบ", cancel: "ยกเลิก", saving: "กำลังบันทึก…", save: "บันทึก" },
+  th: { edit: "แก้ไขบันทึก", title: "บันทึก", add: "Add notes", view: "มุมมองบันทึก", tabs: { write: "Write", preview: "Preview" }, empty: "ยังไม่มีอะไรให้แสดง", anything: "สิ่งที่อยากจดไว้…",
+    help: "รองรับ Markdown: หัวข้อ (#), **ตัวหนา**, *ตัวเอียง*, รายการ, [ลิงก์](url), `โค้ด`, > คำพูด, ตาราง และ - [ ] รายการตรวจสอบ", cancel: "Cancel", saving: "Saving…", save: "Save notes" },
 };
 type Words = (typeof WORDS)["en"];
 

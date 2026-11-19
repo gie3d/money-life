@@ -38,9 +38,9 @@ export default async function TaxPlanPage({ params }: PageProps<"/tax/[id]">) {
           <p className="text-sm text-ink-3">ปีภาษี {plan.year + 543} (ค.ศ. {plan.year}) · เงินได้ 1 ม.ค. – 31 ธ.ค. {plan.year + 543} · ยื่น ภ.ง.ด.90/91 ภายใน 31 มี.ค. {plan.year + 544}</p>
         </div>
         <div className="flex items-center gap-2">
-          <form action={duplicateTaxPlan.bind(null, plan.id)}><button className="btn btn-quiet">ทำสำเนา</button></form>
-          <ConfirmDelete action={deleteTaxPlan.bind(null, plan.id)} title="ลบแผนภาษีนี้?" message={`“${plan.name}” รวมทั้งเงินได้และค่าลดหย่อนทั้งหมดจะถูกลบ`} confirmLabel="ลบ" cancelLabel="ยกเลิก" triggerClassName="btn btn-quiet">
-            ลบ
+          <form action={duplicateTaxPlan.bind(null, plan.id)}><button className="btn btn-quiet">Duplicate</button></form>
+          <ConfirmDelete action={deleteTaxPlan.bind(null, plan.id)} title="ลบแผนภาษีนี้?" message={`“${plan.name}” รวมทั้งเงินได้และค่าลดหย่อนทั้งหมดจะถูกลบ`} triggerClassName="btn btn-quiet">
+            Delete
           </ConfirmDelete>
         </div>
       </div>

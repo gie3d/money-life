@@ -54,7 +54,7 @@ export function EditTaxPlan({ save, year, name, years, onDone }: { save: Save; y
     <form action={action} className="space-y-4">
       <YearAndName year={year} name={name} years={years} />
       <Error state={state} />
-      <button className="btn" disabled={pending}>{pending ? "กำลังบันทึก…" : "บันทึก"}</button>
+      <button className="btn" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
     </form>
   );
 }
@@ -126,7 +126,7 @@ export function TaxIncomeForm({ save, income, onDone }: { save: Save; income?: T
       )}
       <Error state={state} />
       <div className="flex items-center gap-3">
-        <button className="btn" disabled={pending}>{pending ? "กำลังบันทึก…" : income ? "บันทึก" : "เพิ่มเงินได้"}</button>
+        <button className="btn" disabled={pending}>{pending ? "Saving…" : income ? "Save" : "Add income"}</button>
         {!income && state?.saved && !pending && <p role="status" className="text-sm font-semibold text-go-text">เพิ่มแล้ว</p>}
       </div>
     </form>

@@ -211,7 +211,7 @@ function IncomeRow({ income: i, onChange }: { income: TaxIncome; onChange: (p: P
       </label>
       <span className="col-start-3 row-start-1 flex items-center sm:col-start-auto sm:row-start-auto">
         <EditTaxIncomeButton save={updateTaxIncome.bind(null, i.id)} income={i} />
-        <ConfirmDelete action={deleteTaxIncome.bind(null, i.id)} title="ลบเงินได้นี้?" message={`“${i.name}” จะถูกนำออกจากแผน`} confirmLabel="ลบ" cancelLabel="ยกเลิก"
+        <ConfirmDelete action={deleteTaxIncome.bind(null, i.id)} title="ลบเงินได้นี้?" message={`“${i.name}” จะถูกนำออกจากแผน`}
           triggerLabel={`ลบ ${i.name}`} triggerClassName="grid size-8 place-items-center rounded-full text-ink-3 hover:bg-surface-2">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </ConfirmDelete>
@@ -464,7 +464,7 @@ function MobilePanel({ r, opened, status }: { r: TaxResult; opened: TaxResult; s
             <span className="block text-[11px] text-ink-3">เงินได้สุทธิ {THB(r.net)} · อัตราสูงสุด {Math.round(r.marginal * 100)}%</span>
             <span className="num block font-bold">ภาษี {THB(r.tax)} <span className={`text-xs ${r.balance < 0 ? "text-go-text" : "text-ink-3"}`}>{r.balance < 0 ? `ได้คืน ${THB(-r.balance)}` : `ชำระเพิ่ม ${THB(r.balance)}`}</span></span>
           </span>
-          <span className="text-xs font-semibold text-brand">{open ? "ซ่อน" : "ตารางภาษี"}</span>
+          <span className="text-xs font-semibold text-brand">{open ? "Hide" : "Rates"}</span>
         </button>
       </div>
     </div>
