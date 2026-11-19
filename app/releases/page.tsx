@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Markdown from "@/components/Markdown";
+import VersionPicker from "@/components/VersionPicker";
 import { day } from "@/lib/format";
 import { releases } from "@/lib/releases";
 import pkg from "../../package.json";
@@ -22,13 +23,11 @@ export default async function ReleasesPage({ searchParams }: PageProps<"/release
         <p className="text-sm text-ink-3">No release notes yet.</p>
       ) : (
         <>
-          <nav className="flex flex-wrap gap-1.5" aria-label="Versions">
-            {all.map((r, i) => (
-              <Link key={r.version} href={i === 0 ? "/releases" : `/releases?v=${r.version}`} aria-current={r.version === shown.version ? "page" : undefined}
-                className={`num rounded-full px-4 py-1.5 text-sm font-semibold ${r.version === shown.version ? "bg-ink text-surface" : "bg-surface text-ink-3"}`}>
-                {r.version}{i === 0 && " · latest"}
-              </Link>
-            ))}
+          <nav className="flex flex-wrap items-center gap-3" aria-label="Versions">
+            <VersionPicker versions={all.map(({ version, date }) => ({ version, date }))} shown={shown.version} />
+            {shown.version !== all[0].version && (
+              <Link href="/releases" className="text-sm font-semibold text-brand">Back to latest</Link>
+            )}
           </nav>
           <section className="card p-5 sm:p-6">
             <h2 className="num text-xl">

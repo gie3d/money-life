@@ -195,6 +195,7 @@ h1, h2, h3, h4 {
     font-size: 1rem;
   }
   .field:focus { outline: none; border-color: var(--brand); }
+  .field[aria-invalid="true"] { border-color: var(--miss); }
 
   /* Formatted Markdown (asset notes). */
   .markdown { font-size: 0.95rem; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }

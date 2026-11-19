@@ -12,6 +12,7 @@ export default function ConfirmDelete({
   title,
   message,
   confirmLabel = "Delete",
+  cancelLabel = "Cancel",
   triggerLabel,
   triggerClassName,
   error,
@@ -21,6 +22,7 @@ export default function ConfirmDelete({
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   /** Accessible name of the trigger when it shows only an icon. */
   triggerLabel?: string;
   triggerClassName: string;
@@ -46,7 +48,7 @@ export default function ConfirmDelete({
         <h2 id={titleId} className="text-lg">{title}</h2>
         <p className="mt-2 text-sm text-ink-2">{message}</p>
         <div className="mt-6 flex justify-end gap-2">
-          <button type="button" autoFocus onClick={() => dialog.current?.close()} className="btn btn-quiet">Cancel</button>
+          <button type="button" autoFocus onClick={() => dialog.current?.close()} className="btn btn-quiet">{cancelLabel}</button>
           <button type="submit" onClick={() => dialog.current?.close()} className="btn !bg-miss">{confirmLabel}</button>
         </div>
       </dialog>
