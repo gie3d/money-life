@@ -14,6 +14,7 @@ export const SECTIONS: { id: SectionId; href: string; label: string; pages: SubP
     label: "Assets",
     pages: [
       { href: "/accounts", label: "Assets", hint: "What you own" },
+      { href: "/allocation", label: "Allocation", hint: "Where it sits" },
       { href: "/performance", label: "Performance", hint: "How it's done" },
     ],
   },

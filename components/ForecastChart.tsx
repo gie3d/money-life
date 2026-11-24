@@ -33,7 +33,7 @@ export default function ForecastChart({ points, layerRows, layers, today, curren
         {stacked && layers.map((l) => <li key={l.id} className="flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ background: l.color }} />{l.name}</li>)}
         {!stacked && <li className="flex items-center gap-2"><span className={`h-1 w-5 rounded-full ${signSwatch}`} />Recorded</li>}
         {!stacked && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-go" />Trend</li>}
-        {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-brand" />After plans</li>}
+        {withPlans && <li className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-sky" />After plans</li>}
         {!stacked && withBand && <li className="flex items-center gap-2"><span className="h-3 w-5 rounded-sm bg-brand/20" />Likely range</li>}
       </ul>
       <RangeLabel from={day(points[range.start].date)} to={day(points[range.end].date)} range={range} length={points.length} />
@@ -61,7 +61,7 @@ export default function ForecastChart({ points, layerRows, layers, today, curren
             {!stacked && withBand && <Area type="linear" dataKey="range" stroke="none" fill="var(--brand)" fillOpacity={0.14} connectNulls={false} activeDot={false} />}
             {!stacked && <Area type="linear" dataKey="actual" stroke={signStroke("forecast-actual", points.slice(range.start, range.end + 1).map((p) => p.actual))} strokeWidth={2.5} fill="url(#forecast-actual)" fillOpacity={0.18} connectNulls={false} />}
             {!stacked && <Line type="linear" dataKey="trend" stroke="var(--go)" strokeWidth={2} strokeDasharray="5 4" dot={false} />}
-            {withPlans && <Line type="linear" dataKey="afterPlans" stroke="var(--brand)" strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />}
+            {withPlans && <Line type="linear" dataKey="afterPlans" stroke="var(--sky)" strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" dot={false} />}
             {rangeBrush({ rows: points, dataKey: "date", keys: withPlans ? ["actual", "trend", "afterPlans"] : ["actual", "trend"], range, format: name })}
           </ComposedChart>
         </ResponsiveContainer>
