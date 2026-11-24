@@ -12,6 +12,7 @@ import Markdown from "@/components/Markdown";
 import NotesEditor from "@/components/NotesEditor";
 import ProfitChart from "@/components/ProfitChart";
 import PriceForm from "@/components/PriceForm";
+import PriceSourceEditor, { PriceSourceTest } from "@/components/PriceSourceEditor";
 import TradeForm from "@/components/TradeForm";
 import { deleteAccount, deleteEntry, deletePrice, setArchived, updateNotes } from "@/app/actions/money";
 import { sortByCategory } from "@/lib/group";
@@ -95,6 +96,25 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         <div className="flex items-center gap-3 text-sm text-ink-3">
           <NotesEditor notes={null} save={updateNotes.bind(null, account.id)} placeholder="Where it's held, account numbers, why you bought it…" />
           <span>Keep details about this asset here: where it&apos;s held, account numbers, why you bought it.</span>
+        </div>
+      )}
+
+      {investment && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-ink-3">
+          {account.priceUrl ? (
+            <>
+              <span className="font-semibold text-ink">Price source</span>
+              <a href={account.priceUrl} target="_blank" rel="noopener noreferrer" className="max-w-full truncate text-brand underline sm:max-w-md">{account.priceUrl}</a>
+              {account.priceExtract && <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">{account.priceExtract}</code>}
+              <PriceSourceEditor accountId={account.id} url={account.priceUrl} extract={account.priceExtract} />
+              <PriceSourceTest accountId={account.id} />
+            </>
+          ) : (
+            <>
+              <PriceSourceEditor accountId={account.id} url={null} extract={null} />
+              <span>Link a page or API with this asset&apos;s price, to fetch it on Update balances and prices.</span>
+            </>
+          )}
         </div>
       )}
 

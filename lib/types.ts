@@ -20,6 +20,10 @@ export type Account = {
   archived: boolean;
   /** Free text about the asset, in Markdown. */
   notes: string | null;
+  /** Web page or JSON API to look up the latest price of one unit (investments). */
+  priceUrl: string | null;
+  /** How to find the price in it: a dot path into JSON, or a regex whose first group is the price. Empty: guess. */
+  priceExtract: string | null;
 };
 
 export type Entry = {
