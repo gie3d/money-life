@@ -3,12 +3,10 @@ import Link from "next/link";
 import SectionTabs from "@/components/SectionTabs";
 import SortableAssets from "@/components/SortableAssets";
 import AccountForm from "@/components/AccountForm";
-import AllocationBars, { type AllocationRow } from "@/components/AllocationBars";
 import Info from "@/components/Info";
 import TrendCell from "@/components/TrendCell";
 import { listAccounts, listCategories, listEntries, listPrices, listTrades } from "@/lib/data";
 import { day, money, pct, signedMoney, tone } from "@/lib/format";
-import { colorFor } from "@/lib/palette";
 import { balanceTrend, sixMonthTrend } from "@/lib/trend";
 import { accountEntries, holdings } from "@/lib/portfolio";
 import { requireUser } from "@/lib/session";
@@ -49,19 +47,7 @@ export default async function AccountsPage() {
     })
     .filter((g) => g.members.length > 0);
 
-  // Where the money sits: value per category or liquidity group, with what the investments in it cost.
   const counted = held.filter((h) => !h.account.archived);
-  const allocation = (members: typeof held, id: string, label: string, color: string, target: number | null = null): AllocationRow => {
-    const inv = members.filter((h) => h.investment);
-    return { id, label, color, target, value: members.reduce((s, h) => s + h.value, 0), cost: inv.length > 0 ? inv.reduce((s, h) => s + h.cost, 0) : null };
-  };
-  // A category with a target stays on the list when empty: all of its target is still to fill.
-  const byCategory = groups
-    .map((g) => allocation(counted.filter((h) => h.account.categoryId === g.category.id), String(g.category.id), g.category.name, g.category.color, g.category.target))
-    .filter((r) => r.value !== 0 || (r.target ?? 0) > 0);
-  const byLiquidity = LIQUIDITY
-    .map((l) => allocation(counted.filter((h) => h.account.liquidity === l.id), l.id, l.label, colorFor(l.id, LIQUIDITY)))
-    .filter((r) => r.value !== 0);
   const invs = counted.filter((h) => h.investment);
   const invCost = invs.reduce((s, h) => s + h.cost, 0);
   const invPl = invs.reduce((s, h) => s + h.value, 0) - invCost;
@@ -122,7 +108,6 @@ export default async function AccountsPage() {
               })} />
             </section>
           ))}
-          {byCategory.length > 1 && <AllocationBars byCategory={byCategory} byLiquidity={byLiquidity} currency={cur} />}
         </>
       )}
       <AccountForm categories={categories} />

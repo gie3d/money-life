@@ -22,6 +22,20 @@ in `package.json` to match. Under each `###` section, add an `*Open:*` line link
 - The price is used as it comes, so the source should quote it in your currency. Pages that only show the price
   once JavaScript runs, or that block automated requests, can't be read; a JSON API works best.
 
+### Allocation
+*Open:* [Assets → Allocation](/allocation)
+- New **Allocation** tab under Assets ("Where it sits"). The allocation bars (by category or liquidity, with your
+  targets) have moved here from the Assets page, which now lists just your assets.
+- New **Allocation over time** chart: each category's (or liquidity group's) value stacked at the end of every month
+  since your first record, then today. **Share %** shows each month as 100%, so you can see the mix shift; **Value**
+  stacks the amounts, so you also see the total grow. Hover a month for each group's value and share.
+- Pick the months to show with **6M**, **1Y**, **3Y**, **5Y** or **All**, or set your own **From** and **To** dates.
+  A range starting mid-month opens on the value as it stood that day.
+
+### Home
+*Open:* [Home](/)
+- The **After plans** line on the forecast chart is now blue, so it stands apart from the orange likely range around it.
+
 ## [1.8.0] - 2026-11-19
 
 ### Tax
