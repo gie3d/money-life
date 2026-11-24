@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { updateValues } from "@/app/actions/money";
+import { fetchLatestPrice, updateValues } from "@/app/actions/money";
 import DatePicker from "./DatePicker";
 import NumberInput from "./NumberInput";
 import { money, signedMoney, unitPrice, units as fmtUnits } from "@/lib/format";
@@ -22,6 +22,8 @@ export type ValueRow = {
   current: number | null;
   /** What the asset is worth now. */
   value: number;
+  /** An investment with a price source to fetch its latest price from. */
+  priceSource: boolean;
 };
 
 const parse = (s: string) => (s.trim() === "" ? NaN : Number(s));
@@ -67,6 +69,27 @@ function Table({ rows, currency }: { rows: ValueRow[]; currency: string }) {
   const [typed, setTyped] = useState<Record<number, string>>({});
   // A price typed on a category row, copied into every investment under it (each can still be changed after).
   const [catTyped, setCatTyped] = useState<Record<number, string>>({});
+  // Fetched prices only fill the boxes; nothing is saved until "Save values".
+  const [fetching, setFetching] = useState<Record<number, boolean>>({});
+  const [fetchError, setFetchError] = useState<Record<number, string>>({});
+  const [fetched, setFetched] = useState<Record<number, boolean>>({});
+  const fetchOne = async (id: number) => {
+    setFetching((f) => ({ ...f, [id]: true }));
+    setFetchError((e) => ({ ...e, [id]: "" }));
+    try {
+      const r = await fetchLatestPrice(id);
+      if ("price" in r) {
+        setTyped((t) => ({ ...t, [id]: String(r.price) }));
+        setFetched((f) => ({ ...f, [id]: true }));
+      } else setFetchError((e) => ({ ...e, [id]: r.error }));
+    } catch {
+      setFetchError((e) => ({ ...e, [id]: "Couldn't fetch the price." }));
+    } finally {
+      setFetching((f) => ({ ...f, [id]: false }));
+    }
+  };
+  const withSource = rows.filter((r) => r.priceSource);
+  const anyFetching = Object.values(fetching).some(Boolean);
   const setCategory = (items: ValueRow[], categoryId: number, raw: string) => {
     setCatTyped((c) => ({ ...c, [categoryId]: raw }));
     setTyped((t) => ({ ...t, ...Object.fromEntries(items.filter((r) => r.investment).map((r) => [r.id, raw])) }));
@@ -97,6 +120,12 @@ function Table({ rows, currency }: { rows: ValueRow[]; currency: string }) {
           <p className="num text-xl font-bold">{money(next, currency)}</p>
           <p className={`num text-xs font-semibold ${tone(next - now)}`}>{signedMoney(next - now, currency)} {pctOf(next - now, now)}</p>
         </div>
+        {withSource.length > 1 && (
+          <button type="button" className="btn btn-quiet ml-auto" disabled={anyFetching}
+            onClick={() => withSource.forEach((r) => fetchOne(r.id))}>
+            {anyFetching ? "Fetching…" : `Fetch all ${withSource.length} prices`}
+          </button>
+        )}
       </div>
 
       <section className="card overflow-hidden">
@@ -156,14 +185,26 @@ function Table({ rows, currency }: { rows: ValueRow[]; currency: string }) {
                           {r.current === null ? "—" : r.investment ? unitPrice(r.current, currency) : money(r.current, currency)}
                         </td>
                         <td className="py-1.5">
-                          <NumberInput
-                            name={`v-${r.id}`}
-                            aria-label={`New ${r.investment ? "price per unit" : "balance"} of ${r.name} (${currency})`}
-                            placeholder={r.current === null ? "0" : String(r.current)}
-                            value={typed[r.id] ?? ""}
-                            onValueChange={(raw) => setTyped((t) => ({ ...t, [r.id]: raw }))}
-                            className="field num ml-auto block w-40 py-2 text-right"
-                          />
+                          <div className="flex items-center justify-end gap-1.5">
+                            {r.priceSource && (
+                              <button type="button" onClick={() => fetchOne(r.id)} disabled={fetching[r.id]}
+                                title="Fetch the latest price into the box, to check before saving"
+                                aria-label={`Fetch the latest price of ${r.name}`}
+                                className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-surface-2 disabled:opacity-50">
+                                {fetching[r.id] ? "Fetching…" : "Fetch"}
+                              </button>
+                            )}
+                            <NumberInput
+                              name={`v-${r.id}`}
+                              aria-label={`New ${r.investment ? "price per unit" : "balance"} of ${r.name} (${currency})`}
+                              placeholder={r.current === null ? "0" : String(r.current)}
+                              value={typed[r.id] ?? ""}
+                              onValueChange={(raw) => { setTyped((t) => ({ ...t, [r.id]: raw })); setFetched((f) => ({ ...f, [r.id]: false })); }}
+                              className={`field num block w-40 py-2 text-right ${fetched[r.id] ? "ring-2 ring-brand/40" : ""}`}
+                            />
+                          </div>
+                          {fetchError[r.id] && <p role="alert" className="mt-1 max-w-64 text-right text-xs text-miss-text ml-auto">{fetchError[r.id]}</p>}
+                          {fetched[r.id] && !fetchError[r.id] && <p className="mt-1 text-right text-xs text-ink-3">Fetched · check, then save</p>}
                         </td>
                         <td className="num py-2.5 text-right">{money(r.value, currency)}</td>
                         <td className={`num py-2.5 text-right ${has ? "font-semibold" : "text-ink-3"}`}>{money(v, currency)}</td>

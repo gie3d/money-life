@@ -32,6 +32,7 @@ export default async function UpdateValuesPage() {
       units: h?.quantity ?? null,
       current: h ? (h.investment ? h.price : h.value) : null,
       value: h?.value ?? 0,
+      priceSource: isInvestment(a) && !!a.priceUrl,
     }];
   });
 

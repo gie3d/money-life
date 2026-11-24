@@ -4,6 +4,24 @@ Newest first. This file is shown in the app at `/releases` (the "Release notes" 
 `## [version] - date` headings as they are. When you ship a change, add a new version at the top and bump `version`
 in `package.json` to match. Under each `###` section, add an `*Open:*` line linking to the page it changed.
 
+## [1.9.0] - 2026-11-24
+
+### Fetch the latest price
+*Open:* [Update balances and prices](/update)
+- An investment can now have a **price source**: a link to a web page or JSON API that shows the price of one unit.
+  Add it on the asset's page with **Add price source** (the pencil changes it later).
+- **Where the price is** says which number to take: a dot path into JSON like `bitcoin.thb` or `0.lowest_ask` (`0` is
+  the first item of a list), or a `/regex/` whose first group is the price. Leave it empty and it looks in the usual
+  places (a `price` or `last` field, or the price marked up on a shop or finance page).
+- **Test** fetches the price there and then, in the dialog before you save or on the asset page for the saved source.
+  It shows the price it found, or why it found none, and the response from the link, to check the path against.
+  Nothing is saved.
+- On **Update balances and prices**, an investment with a source gets a **Fetch** button beside its box. It fills in
+  the latest price for you to check (and change if you like); it is only saved when you press **Save values**.
+  With two or more sources, **Fetch all** fills them all at once.
+- The price is used as it comes, so the source should quote it in your currency. Pages that only show the price
+  once JavaScript runs, or that block automated requests, can't be read; a JSON API works best.
+
 ## [1.8.0] - 2026-11-19
 
 ### Tax

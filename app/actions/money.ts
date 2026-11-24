@@ -6,6 +6,7 @@ import { pool } from "@/lib/db";
 import { getAccount, listAccounts, listEntries, listPrices, listTradeParts, listTrades } from "@/lib/data";
 import { deriveTrades, replay, TRANSFER_ID_BASE } from "@/lib/investment";
 import { money } from "@/lib/format";
+import { fetchPrice as lookUpPrice, type Fetched } from "@/lib/price-fetch";
 import { holdings } from "@/lib/portfolio";
 import { requireEditable, requireUser } from "@/lib/session";
 import { HEX, isInvestment, LIQUIDITY, TYPES, type Total, type Trade, type Transfer } from "@/lib/types";
@@ -142,6 +143,38 @@ export async function updateNotes(accountId: number, _: FormState, form: FormDat
   const { rowCount } = await pool.query("UPDATE accounts SET notes = $3 WHERE id = $1 AND user_id = $2", [accountId, user.id, notes || null]);
   if (!rowCount) return { error: "That asset no longer exists." };
   revalidatePath(`/accounts/${accountId}`);
+}
+
+/** Saves where to look up an investment's latest price; an empty URL removes it. */
+export async function updatePriceSource(accountId: number, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireEditable();
+  if (!(await investmentOf(user.id, accountId))) return { error: "That asset no longer exists." };
+  const url = String(form.get("priceUrl") ?? "").trim();
+  const extract = String(form.get("priceExtract") ?? "").trim();
+  if (url.length > 2000 || extract.length > 500) return { error: "That link or rule is too long." };
+  if (url && !/^https?:\/\/\S+$/i.test(url)) return { error: "The link should start with http:// or https://." };
+  await pool.query("UPDATE accounts SET price_url = $3, price_extract = $4 WHERE id = $1 AND user_id = $2", [accountId, user.id, url || null, (url && extract) || null]);
+  revalidatePath("/", "layout");
+}
+
+/** Tries a price source before it is saved: what price it would give. */
+export async function testPriceSource(url: string, extract: string): Promise<Fetched> {
+  await requireUser();
+  if (!url.trim()) return { error: "Enter a link first." };
+  return lookUpPrice(url, extract || null);
+}
+
+/**
+ * Looks up the latest price of one unit from the asset's saved source. Nothing is saved: the user checks it first.
+ * `withPreview` also sends back the start of the response, for testing the source.
+ */
+export async function fetchLatestPrice(accountId: number, withPreview = false): Promise<Fetched> {
+  const user = await requireUser();
+  const account = await investmentOf(user.id, accountId);
+  if (!account) return { error: "That asset no longer exists." };
+  if (!account.priceUrl) return { error: "This asset has no price source yet." };
+  const { preview, ...result } = await lookUpPrice(account.priceUrl, account.priceExtract);
+  return withPreview ? { ...result, preview } : result;
 }
 
 export async function setArchived(accountId: number, archived: boolean) {
